@@ -1,6 +1,8 @@
 import math
 import sys
 from typing import Iterable
+import random
+import itertools
 
 import torch
 import torch.nn as nn
@@ -12,12 +14,35 @@ from loss import GANLoss
 ls_gan_loss = GANLoss('lsgan', 1.0, 0.0)
 L1_loss = nn.L1Loss()
 
+def probabilistic_next(iter1, iter2, prob=0.25):
+    """
+    根据给定的概率从两个迭代器中选择下一个元素。
+    """
+    if random.random() > prob:
+        return next(iter1)
+    else:
+        return next(iter2)
+
+def safe_probabilistic_traverse(iter1, iter2, prob=0.25):
+    """
+    安全地按照概率同时遍历两个迭代器。
+    """
+    if random.random() > prob:
+        try:
+            return next(iter1)
+        except StopIteration:
+            return next(iter2)
+    else:
+        try:
+            return next(iter2)
+        except StopIteration:
+            return next(iter1)
+
 def train_one_epoch(model: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler,
-                    log_writer=None,
-                    args=None,
-                    epoch_size=1):
+                    log_writer=None, args=None, epoch_size=1,
+                    data_loader_appendix=None):
     model.train(True)
     metric_logger = misc.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', misc.SmoothedValue(window_size=1, fmt='{value:.6f}'))
@@ -31,24 +56,36 @@ def train_one_epoch(model: torch.nn.Module,
     if log_writer is not None:
         print('log_dir: {}'.format(log_writer.log_dir))
     data_loader_i = iter(data_loader)
+
+    if data_loader_appendix is not None:
+        probability = 0.25
+        data_loader_i_appendix = iter(data_loader_appendix)
+        
     for data_iter_step in metric_logger.log_every(range(epoch_size), print_freq, header):
-        (batch, _) = next(data_loader_i)
+        if data_loader_appendix is not None:
+            (batch, _) = safe_probabilistic_traverse(data_loader_i, data_loader_i_appendix, probability)
+        else:
+            (batch, _) = next(data_loader_i)
         # we use a per iteration (instead of per epoch) lr scheduler
-        if isinstance(batch, tuple):
-            samples, visual_tokens = batch
+        if not isinstance(batch, list):
+            samples = batch.clone()
+            visual_tokens = batch.clone()
             samples = samples.to(device, non_blocking=True)
             visual_tokens = visual_tokens.to(device, non_blocking=True)
         else: # hack for consistency
             samples = batch
-            samples = samples.to(device, non_blocking=True)
-            visual_tokens = samples
+            new_samples = []
+            for item in samples:
+                item = item.to(device, non_blocking=True)
+                new_samples.append(item)
+            # samples = samples.to(device, non_blocking=True)
+            samples = new_samples
+            visual_tokens = new_samples
 
         if data_iter_step % accum_iter == 0:
             lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
-
         with torch.cuda.amp.autocast():
             loss_dict = model(samples, visual_tokens)[0]
-
         loss = torch.stack([loss_dict[l] for l in loss_dict if 'unscaled' not in l]).sum()
         loss_value = loss.item()
 
@@ -67,6 +104,7 @@ def train_one_epoch(model: torch.nn.Module,
         metric_logger.update(**{k: v.item() for k, v in loss_dict.items()})
 
         lr = optimizer.param_groups[0]["lr"]
+        # print(lr)
         metric_logger.update(lr=lr)
 
         loss_value_reduce = misc.all_reduce_mean(loss_value)

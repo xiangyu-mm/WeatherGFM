@@ -6,6 +6,14 @@ import torch.distributed as dist
 import copy
 import math
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
+
+zscore_normalizations_sevir = {
+    'vil':{'scale':47.54,'shift':33.44},
+    'ir069':{'scale':1174.68,'shift':-3683.58},
+    'ir107':{'scale':2562.43,'shift':-1552.80},
+    'lght':{'scale':0.60517,'shift':0.02990}
+}
 
 def is_dist_avail_and_initialized():
     if not dist.is_available():
@@ -65,10 +73,10 @@ def val_model(model, data_loader_val, epoch, save_path, mode='val_pretrain', pat
         input_img2_mask = mask[:, input_img1_patch_num+target_img1_patch_num:input_img1_patch_num+target_img1_patch_num+input_img2_patch_num]
         target_img2_mask = mask[:, input_img1_patch_num+target_img1_patch_num+input_img2_patch_num:]
 
-        target_img1_mask = target_img1_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        target_img1_mask = target_img1_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         target_img1_mask = model.unpatchify(target_img1_mask)  # 1 is removing, 0 is keeping
         target_img1_mask = torch.einsum('nchw->nhwc', target_img1_mask).detach().cpu()
-        target_img2_mask = target_img2_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        target_img2_mask = target_img2_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         target_img2_mask = model.unpatchify(target_img2_mask)  # 1 is removing, 0 is keeping
         target_img2_mask = torch.einsum('nchw->nhwc', target_img2_mask).detach().cpu()
 
@@ -139,11 +147,11 @@ def val_model(model, data_loader_val, epoch, save_path, mode='val_pretrain', pat
         cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_fuse_img2.png'.format(idx)), pred_target_final_img2)
 
 
-def val_on_master_CNN_Head(model, data_loader_val, epoch, save_path, mode, patch_size):
+def val_on_master_CNN_Head(model, data_loader_val, epoch, save_path, mode, patch_size, data_type):
     if is_main_process():
-        val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode, patch_size)
+        val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode, patch_size, data_type)
 
-def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretrain', patch_size=16):
+def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretrain', patch_size=16, data_type='sevir'):
     if mode == 'val_pretrain':
         mask_ratio = 0.75
         train_mode = True
@@ -179,73 +187,393 @@ def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretr
         input_img2_mask = mask[:, input_img1_patch_num+target_img1_patch_num:input_img1_patch_num+target_img1_patch_num+input_img2_patch_num]
         target_img2_mask = mask[:, input_img1_patch_num+target_img1_patch_num+input_img2_patch_num:]
 
-        target_img1_mask = target_img1_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        target_img1_mask = target_img1_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         target_img1_mask = model.unpatchify(target_img1_mask)  # 1 is removing, 0 is keeping
         target_img1_mask = torch.einsum('nchw->nhwc', target_img1_mask).detach().cpu()
-        target_img2_mask = target_img2_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        target_img2_mask = target_img2_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         target_img2_mask = model.unpatchify(target_img2_mask)  # 1 is removing, 0 is keeping
         target_img2_mask = torch.einsum('nchw->nhwc', target_img2_mask).detach().cpu()
 
         pred_target_img1 = torch.einsum('nchw->nhwc', pred_target_img1).detach().cpu()
         pred_target_img2 = torch.einsum('nchw->nhwc', pred_target_img2).detach().cpu()
 
-        input_img1 = torch.einsum('nchw->nhwc', input_img1)
-        target_img1 = torch.einsum('nchw->nhwc', target_img1)
-        input_img2 = torch.einsum('nchw->nhwc', input_img2)
-        target_img2 = torch.einsum('nchw->nhwc', target_img2)
+        input_img1 = torch.einsum('nchw->nhwc', input_img1).detach().cpu()
+        target_img1 = torch.einsum('nchw->nhwc', target_img1).detach().cpu()
+        input_img2 = torch.einsum('nchw->nhwc', input_img2).detach().cpu()
+        target_img2 = torch.einsum('nchw->nhwc', target_img2).detach().cpu()
+        if data_type == 'sevir':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_mask_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0])
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_mask_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0])
 
-        input_img1 = (torch.clip((input_img1[0].cpu().detach()) * 255, 0, 255).int()).unsqueeze(0)
-        input_img2 = (torch.clip((input_img2[0].cpu().detach()) * 255, 0, 255).int()).unsqueeze(0)
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_mask_img1 = pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_mask_img2 = pred_target_img2 * (target_img2_mask[0][:,:,0])
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap='inferno')
+            plt.title('IR_069 Data')
+            plt.colorbar()
+            plt.colorbar(shrink=0.5)
 
-        target_img1 = (torch.clip((target_img1[0].cpu().detach()) * 255, 0, 255).int()).unsqueeze(0)
-        target_mask_img1 = target_img1 * (1 - target_img1_mask)
-        target_img2 = (torch.clip((target_img2[0].cpu().detach()) * 255, 0, 255).int()).unsqueeze(0)
-        target_mask_img2 = target_img2 * (1 - target_img2_mask)
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap='inferno')
+            plt.title('IR_107 Data')
+            plt.colorbar()
 
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap='viridis')
+            plt.title('vil_gt Data')
+            plt.colorbar()
 
-        pred_target_img1 = (torch.clip((pred_target_img1[0].cpu().detach()) * 255, 0, 255).int()).unsqueeze(0)
-        pred_target_mask_img1 = pred_target_img1 * (target_img1_mask)
-        pred_target_final_img1 = target_img1 * (1 - target_img1_mask) + pred_target_img1 * (target_img1_mask)
-        pred_target_img2 = (torch.clip((pred_target_img2[0].cpu().detach()) * 255, 0, 255).int()).unsqueeze(0)
-        pred_target_mask_img2 = pred_target_img2 * (target_img2_mask)
-        pred_target_final_img2 = target_img2 * (1 - target_img2_mask) + pred_target_img2 * (target_img2_mask)
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap='viridis')
+            plt.title('vil_pred Data')
+            plt.colorbar()
 
-        input_img1 = input_img1[0].numpy().astype(np.uint8)
-        input_img2 = input_img2[0].numpy().astype(np.uint8)
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap='inferno')
+            plt.title('IR_069 Data')
+            plt.colorbar()
 
-        target_img1 = target_img1[0].numpy().astype(np.uint8)
-        target_img2 = target_img2[0].numpy().astype(np.uint8)
-        target_mask_img1 = target_mask_img1[0].numpy().astype(np.uint8)
-        target_mask_img2 = target_mask_img2[0].numpy().astype(np.uint8)
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap='inferno')
+            plt.title('IR_107 Data')
+            plt.colorbar()
 
-        pred_target_img1 = pred_target_img1[0].numpy().astype(np.uint8)
-        pred_target_mask_img1 = pred_target_mask_img1[0].numpy().astype(np.uint8)
-        pred_target_final_img1 = pred_target_final_img1[0].numpy().astype(np.uint8)
-        pred_target_img2 = pred_target_img2[0].numpy().astype(np.uint8)
-        pred_target_mask_img2 = pred_target_mask_img2[0].numpy().astype(np.uint8)
-        pred_target_final_img2 = pred_target_final_img2[0].numpy().astype(np.uint8)
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap='viridis')
+            plt.title('vil_gt Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap='viridis')
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.tight_layout()
         
+            save_path_img = os.path.join(save_path, 'vil', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
         
-        save_path_img = os.path.join(save_path, 'vis', mode, 'Epoch{}'.format(epoch))
-        if not os.path.exists(save_path_img):
-            os.makedirs(save_path_img)
-        
-        
-        cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_input_img1_{}.png'.format(idx, deg_type[0])), input_img1)
-        cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_target_img1.png'.format(idx)), target_img1)
-        #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_target_mask_img1.png'.format(idx)), target_mask_img1)
-        #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_img1.png'.format(idx)), pred_target_img1)
-        #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_mask_img1.png'.format(idx)), pred_target_mask_img1)
-        #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_fuse_img1.png'.format(idx)), pred_target_final_img1)
+        elif data_type == 'trans':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
 
-        cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_input_img2_{}.png'.format(idx, deg_type[0])), input_img2)
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap='inferno')
+            plt.title('IR_069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap='inferno')
+            plt.title('IR_069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap='inferno')
+            plt.title('IR_107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap='inferno')
+            plt.title('ir_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap='inferno')
+            plt.title('IR_069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap='inferno')
+            plt.title('IR_069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap='inferno')
+            plt.title('IR_107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap='inferno')
+            plt.title('IR_107 Data')
+            plt.colorbar()
+
+            plt.tight_layout()
         
-        if target_img2_flag:
-            cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_target_img2.png'.format(idx)), target_img2)
-        #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_target_mask_img2.png'.format(idx)), target_mask_img2)
-        cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_img2.png'.format(idx)), pred_target_img2)
-        #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_mask_img2.png'.format(idx)), pred_target_mask_img2)
-        cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_fuse_img2.png'.format(idx)), pred_target_final_img2)
+            save_path_img = os.path.join(save_path, 'ir', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+        elif data_type == 'inter':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'inter', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+        elif data_type == 'down_scaling_vil':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap='viridis')
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'down_scaling_vil', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+        elif data_type == 'predict':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img13 = input_img1[0][:,:,2]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img14 = input_img1[0][:,:,3]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img23 = input_img2[0][:,:,2]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img24 = input_img2[0][:,:,3]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_mask_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0])
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_mask_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0])
+
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_mask_img1 = pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_mask_img2 = pred_target_img2 * (target_img2_mask[0][:,:,0])
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+            plt.figure(figsize=(30, 8))
+            plt.subplot(2, 6, 1)
+            plt.imshow(input_img11, cmap='viridis')
+            plt.title('vil_0min Data')
+            plt.colorbar()
+            plt.colorbar(shrink=0.5)
+
+            plt.subplot(2, 6, 2)
+            plt.imshow(input_img12, cmap='viridis')
+            plt.title('vil_30min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 3)
+            plt.imshow(input_img13, cmap='viridis')
+            plt.title('vil_60min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 4)
+            plt.imshow(input_img14, cmap='viridis')
+            plt.title('vil_90min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 5)
+            plt.imshow(target_img1, cmap='viridis')
+            plt.title('vil_gt Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 6)
+            plt.imshow(pred_target_final_img1, cmap='viridis')
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 7)
+            plt.imshow(input_img21, cmap='viridis')
+            plt.title('vil_0min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 8)
+            plt.imshow(input_img22, cmap='viridis')
+            plt.title('vil_30min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 9)
+            plt.imshow(input_img23, cmap='viridis')
+            plt.title('vil_60min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 10)
+            plt.imshow(input_img24, cmap='viridis')
+            plt.title('vil_90min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 11)
+            plt.imshow(target_img2, cmap='viridis')
+            plt.title('vil_gt Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 12)
+            plt.imshow(pred_target_final_img2, cmap='viridis')
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'vil_predict', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+        # input_img1 = input_img1.numpy().astype(np.uint8)
+        # input_img2 = input_img2.numpy().astype(np.uint8)
+
+        # target_img1 = target_img1.numpy().astype(np.uint8)
+        # target_img2 = target_img2.numpy().astype(np.uint8)
+        # target_mask_img1 = target_mask_img1[0].numpy().astype(np.uint8)
+        # target_mask_img2 = target_mask_img2[0].numpy().astype(np.uint8)
+
+        # pred_target_img1 = pred_target_img1.numpy().astype(np.uint8)
+        # pred_target_mask_img1 = pred_target_mask_img1[0].numpy().astype(np.uint8)
+        # pred_target_final_img1 = pred_target_final_img1.numpy().astype(np.uint8)
+        # pred_target_img2 = pred_target_img2.numpy().astype(np.uint8)
+        # pred_target_mask_img2 = pred_target_mask_img2[0].numpy().astype(np.uint8)
+        # pred_target_final_img2 = pred_target_final_img2.numpy().astype(np.uint8)
+
+        # # cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_input_img1_{}.png'.format(idx, deg_type[0])), input_img1)
+        # cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_target_img1.png'.format(idx)), target_img1)
+        # #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_target_mask_img1.png'.format(idx)), target_mask_img1)
+        # #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_img1.png'.format(idx)), pred_target_img1)
+        # #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_mask_img1.png'.format(idx)), pred_target_mask_img1)
+        # #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_fuse_img1.png'.format(idx)), pred_target_final_img1)
+
+        # # cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_input_img2_{}.png'.format(idx, deg_type[0])), input_img2)
+        
+        # if target_img2_flag:
+        #     cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_target_img2.png'.format(idx)), target_img2)
+        # #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_target_mask_img2.png'.format(idx)), target_mask_img2)
+        # cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_img2.png'.format(idx)), pred_target_img2)
+        # #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_mask_img2.png'.format(idx)), pred_target_mask_img2)
+        # cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_fuse_img2.png'.format(idx)), pred_target_final_img2)
 
 def val_model_CNN_Head_ExtraSaveOutput(model, data_loader_val, epoch, save_path, mode='val_pretrain', patch_size=16):
     if mode == 'val_pretrain':
@@ -285,10 +613,10 @@ def val_model_CNN_Head_ExtraSaveOutput(model, data_loader_val, epoch, save_path,
         input_img2_mask = mask[:, input_img1_patch_num+target_img1_patch_num:input_img1_patch_num+target_img1_patch_num+input_img2_patch_num]
         target_img2_mask = mask[:, input_img1_patch_num+target_img1_patch_num+input_img2_patch_num:]
 
-        target_img1_mask = target_img1_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        target_img1_mask = target_img1_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         target_img1_mask = model.unpatchify(target_img1_mask)  # 1 is removing, 0 is keeping
         target_img1_mask = torch.einsum('nchw->nhwc', target_img1_mask).detach().cpu()
-        target_img2_mask = target_img2_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        target_img2_mask = target_img2_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         target_img2_mask = model.unpatchify(target_img2_mask)  # 1 is removing, 0 is keeping
         target_img2_mask = torch.einsum('nchw->nhwc', target_img2_mask).detach().cpu()
 
@@ -359,9 +687,9 @@ def val_model_CNN_Head_ExtraSaveOutput(model, data_loader_val, epoch, save_path,
         img_name = input_query_img2_path.split('/')[-1]
         cv2.imwrite(os.path.join(save_path_img, '{}'.format(img_name)), pred_target_final_img2)
 
-def val_on_master_CNN_Head_ViT(model, data_loader_val, epoch, save_path, mode, patch_size):
+def val_on_master_CNN_Head_ViT(model, data_loader_val, epoch, save_path, mode, patch_size, data_type):
     if is_main_process():
-        val_model_CNN_Head_ViT(model, data_loader_val, epoch, save_path, mode, patch_size)
+        val_model_CNN_Head_ViT(model, data_loader_val, epoch, save_path, mode, patch_size, data_type)
 
 def val_model_CNN_Head_ViT(model, data_loader_val, epoch, save_path, mode, patch_size=16):
     idx = 0
@@ -477,7 +805,7 @@ def val_model_stitch(model, data_loader_val, epoch, save_path, mode='val_pretrai
             preserve_list = ids_shuffle
             loss, pred, mask = model(imgs=grid_stitch, mask_ratio=mask_ratio, preserve_list=preserve_list)
         
-        mask = mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        mask = mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         mask = model.unpatchify(mask)  # 1 is removing, 0 is keeping
         mask = torch.einsum('nchw->nhwc', mask).detach().cpu()
         #print('mask: ', mask.shape)
@@ -548,10 +876,10 @@ def val_model_mismatched_prompt(model, data_loader_val, epoch, save_path, mode='
         input_img2_mask = mask[:, input_img1_patch_num+target_img1_patch_num:input_img1_patch_num+target_img1_patch_num+input_img2_patch_num]
         target_img2_mask = mask[:, input_img1_patch_num+target_img1_patch_num+input_img2_patch_num:]
 
-        target_img1_mask = target_img1_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        target_img1_mask = target_img1_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         target_img1_mask = model.unpatchify(target_img1_mask)  # 1 is removing, 0 is keeping
         target_img1_mask = torch.einsum('nchw->nhwc', target_img1_mask).detach().cpu()
-        target_img2_mask = target_img2_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        target_img2_mask = target_img2_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         target_img2_mask = model.unpatchify(target_img2_mask)  # 1 is removing, 0 is keeping
         target_img2_mask = torch.einsum('nchw->nhwc', target_img2_mask).detach().cpu()
 
@@ -673,10 +1001,10 @@ def val_model_vqgan(model, data_loader_val, epoch, save_path, mode='val_pretrain
         input_img2_mask = mask[:, input_img1_patch_num+target_img1_patch_num:input_img1_patch_num+target_img1_patch_num+input_img2_patch_num]
         target_img2_mask = mask[:, input_img1_patch_num+target_img1_patch_num+input_img2_patch_num:]
 
-        target_img1_mask = target_img1_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        target_img1_mask = target_img1_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         target_img1_mask = model.unpatchify(target_img1_mask)  # 1 is removing, 0 is keeping
         target_img1_mask = torch.einsum('nchw->nhwc', target_img1_mask).detach().cpu()
-        target_img2_mask = target_img2_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        target_img2_mask = target_img2_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         target_img2_mask = model.unpatchify(target_img2_mask)  # 1 is removing, 0 is keeping
         target_img2_mask = torch.einsum('nchw->nhwc', target_img2_mask).detach().cpu()
 
@@ -809,10 +1137,10 @@ def val_model_PSNR(model, data_loader_val, epoch, save_path, mode='val_pretrain'
         input_img2_mask = mask[:, input_img1_patch_num+target_img1_patch_num:input_img1_patch_num+target_img1_patch_num+input_img2_patch_num]
         target_img2_mask = mask[:, input_img1_patch_num+target_img1_patch_num+input_img2_patch_num:]
 
-        target_img1_mask = target_img1_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        target_img1_mask = target_img1_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         target_img1_mask = model.unpatchify(target_img1_mask)  # 1 is removing, 0 is keeping
         target_img1_mask = torch.einsum('nchw->nhwc', target_img1_mask).detach().cpu()
-        target_img2_mask = target_img2_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 3)
+        target_img2_mask = target_img2_mask.unsqueeze(-1).repeat(1, 1, patch_size ** 2 * 2)
         target_img2_mask = model.unpatchify(target_img2_mask)  # 1 is removing, 0 is keeping
         target_img2_mask = torch.einsum('nchw->nhwc', target_img2_mask).detach().cpu()
 

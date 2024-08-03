@@ -1,0 +1,4 @@
+srun: job 3732449 queued and waiting for resources
+srun: Force Terminated job 3732449
+srun: Job has been cancelled
+srun: error: Unable to allocate resources: Job/step already completing or completed

@@ -1,0 +1,974 @@
+srun: job 3752321 queued and waiting for resources
+srun: job 3752321 has been allocated resources
+srun: Job 3752321 scheduled successfully!
+Current QUOTA_TYPE is [reserved], which means the job has occupied quota in RESERVED_TOTAL under your partition.
+Current PHX_PRIORITY is normal
+
+[2024-07-25 19:58:15,305] torch.distributed.run: [WARNING] 
+[2024-07-25 19:58:15,305] torch.distributed.run: [WARNING] *****************************************
+[2024-07-25 19:58:15,305] torch.distributed.run: [WARNING] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+[2024-07-25 19:58:15,305] torch.distributed.run: [WARNING] *****************************************
+| distributed init (rank 0): env://, gpu 0
+| distributed init (rank 2): env://, gpu 2
+| distributed init (rank 1): env://, gpu 1
+| distributed init (rank 3): env://, gpu 3
+[19:58:30.092045] job dir: /mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new
+[19:58:30.092206] Namespace(save_ckpt_freq=5,
+batch_size=20,
+epochs=50,
+accum_iter=4,
+model='mae_vit_large_patch16_dec512d8b_input256',
+input_size=256,
+mask_ratio=0.75,
+ckpt=None,
+weight_decay=0.05,
+lr=None,
+blr=0.0001,
+min_lr=1e-05,
+warmup_epochs=5,
+break_after_epoch=None,
+data_path='/mnt/petrelfs/zhaoxiangyu1/data/Test100_256',
+data_path_val='/mnt/petrelfs/zhaoxiangyu1/data/Test100_256',
+imagenet_percent=1,
+subsample=False,
+output_dir='experiments/weather_5tasks',
+log_dir='./output_dir',
+device='cuda',
+seed=0,
+resume='',
+start_epoch=0,
+num_workers=1,
+pin_mem=True,
+world_size=4,
+local_rank=-1,
+dist_on_itp=False,
+dist_url='env://',
+second_input_size=224,
+rank=0,
+gpu=0,
+distributed=True,
+dist_backend='nccl')
+[19:58:34.843147] 1237464
+[19:58:34.843229] 274992
+[19:58:39.426038] 200
+[19:58:39.427077] Sampler_train = <torch.utils.data.distributed.DistributedSampler object at 0x7f0be2f823b0>
+[19:58:41.436103] Head: Simple_Head
+[19:58:56.462784] epoch_size is 1237464
+[19:58:56.464707] Model = MaskedAutoencoderViT(
+  (patch_embed): PatchEmbed(
+    (proj): Conv2d(2, 1024, kernel_size=(16, 16), stride=(16, 16))
+    (norm): Identity()
+  )
+  (patch_embed_4c): PatchEmbed(
+    (proj): Conv2d(4, 1024, kernel_size=(16, 16), stride=(16, 16))
+    (norm): Identity()
+  )
+  (align_patch): Linear(in_features=1024, out_features=1024, bias=True)
+  (blocks): ModuleList(
+    (0-23): 24 x Block(
+      (norm1): LayerNorm((1024,), eps=1e-06, elementwise_affine=True)
+      (attn): Attention(
+        (qkv): Linear(in_features=1024, out_features=3072, bias=True)
+        (attn_drop): Dropout(p=0.0, inplace=False)
+        (proj): Linear(in_features=1024, out_features=1024, bias=True)
+        (proj_drop): Dropout(p=0.0, inplace=False)
+      )
+      (drop_path): Identity()
+      (norm2): LayerNorm((1024,), eps=1e-06, elementwise_affine=True)
+      (mlp): Mlp(
+        (fc1): Linear(in_features=1024, out_features=4096, bias=True)
+        (act): GELU(approximate='none')
+        (drop1): Dropout(p=0.0, inplace=False)
+        (fc2): Linear(in_features=4096, out_features=1024, bias=True)
+        (drop2): Dropout(p=0.0, inplace=False)
+      )
+    )
+  )
+  (norm): LayerNorm((1024,), eps=1e-06, elementwise_affine=True)
+  (decoder_embed): Linear(in_features=1024, out_features=512, bias=True)
+  (decoder_blocks): ModuleList(
+    (0-7): 8 x Block(
+      (norm1): LayerNorm((512,), eps=1e-06, elementwise_affine=True)
+      (attn): Attention(
+        (qkv): Linear(in_features=512, out_features=1536, bias=True)
+        (attn_drop): Dropout(p=0.0, inplace=False)
+        (proj): Linear(in_features=512, out_features=512, bias=True)
+        (proj_drop): Dropout(p=0.0, inplace=False)
+      )
+      (drop_path): Identity()
+      (norm2): LayerNorm((512,), eps=1e-06, elementwise_affine=True)
+      (mlp): Mlp(
+        (fc1): Linear(in_features=512, out_features=2048, bias=True)
+        (act): GELU(approximate='none')
+        (drop1): Dropout(p=0.0, inplace=False)
+        (fc2): Linear(in_features=2048, out_features=512, bias=True)
+        (drop2): Dropout(p=0.0, inplace=False)
+      )
+    )
+  )
+  (decoder_norm): LayerNorm((512,), eps=1e-06, elementwise_affine=True)
+  (decoder_pred): Linear(in_features=512, out_features=512, bias=True)
+  (decoder_pred_4c): Linear(in_features=512, out_features=1024, bias=True)
+  (CNN_Head): Simple_Head(
+    (conv_first): Conv2d(2, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (HRconv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv_last): Conv2d(64, 2, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (lrelu): LeakyReLU(negative_slope=0.1, inplace=True)
+  )
+  (L1_loss): L1Loss()
+)
+[19:58:56.464745] base lr: 1.00e-04
+[19:58:56.464756] actual lr: 1.25e-04
+[19:58:56.464768] accumulate grad iterations: 4
+[19:58:56.464778] effective batch size: 320
+[19:58:56.604472] AdamW (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.95)
+    capturable: False
+    differentiable: False
+    eps: 1e-08
+    foreach: None
+    fused: None
+    lr: 0.000125
+    maximize: False
+    weight_decay: 0.0
+
+Parameter Group 1
+    amsgrad: False
+    betas: (0.9, 0.95)
+    capturable: False
+    differentiable: False
+    eps: 1e-08
+    foreach: None
+    fused: None
+    lr: 0.000125
+    maximize: False
+    weight_decay: 0.05
+)
+[19:58:56.604710] Start training for 50 epochs
+[19:59:07.663963] Epoch: [0]  [    0/15468]  eta: 1 day, 23:01:08  lr: 0.000000  pix_loss: 1.7162 (1.7162)  pix_loss_CNN: 1.4348 (1.4348)  time: 10.9432  data: 0.0001  max mem: 54047
+[20:01:01.711669] Epoch: [0]  [   20/15468]  eta: 1 day, 1:32:25  lr: 0.000000  pix_loss: 1.7426 (1.7666)  pix_loss_CNN: 1.4730 (1.4900)  time: 5.7023  data: 0.0000  max mem: 56958
+[20:02:55.321122] Epoch: [0]  [   40/15468]  eta: 1 day, 0:56:22  lr: 0.000000  pix_loss: 1.7524 (1.7636)  pix_loss_CNN: 1.4812 (1.4913)  time: 5.6804  data: 0.0000  max mem: 56958
+[20:04:40.274878] Epoch: [0]  [   60/15468]  eta: 1 day, 0:06:17  lr: 0.000000  pix_loss: 1.6956 (1.7520)  pix_loss_CNN: 1.4507 (1.4846)  time: 5.2476  data: 0.0000  max mem: 56958
+[20:06:25.703925] Epoch: [0]  [   80/15468]  eta: 23:41:35  lr: 0.000000  pix_loss: 1.7291 (1.7488)  pix_loss_CNN: 1.5106 (1.4903)  time: 5.2714  data: 0.0000  max mem: 56958
+[20:08:11.425345] Epoch: [0]  [  100/15468]  eta: 23:26:42  lr: 0.000000  pix_loss: 1.6424 (1.7312)  pix_loss_CNN: 1.4402 (1.4851)  time: 5.2860  data: 0.0000  max mem: 56958
+[20:09:52.914693] Epoch: [0]  [  120/15468]  eta: 23:07:12  lr: 0.000000  pix_loss: 1.6492 (1.7171)  pix_loss_CNN: 1.4868 (1.4854)  time: 5.0744  data: 0.0000  max mem: 56958
+[20:11:34.807398] Epoch: [0]  [  140/15468]  eta: 22:53:30  lr: 0.000000  pix_loss: 1.5900 (1.6995)  pix_loss_CNN: 1.4713 (1.4832)  time: 5.0946  data: 0.0000  max mem: 56958
+[20:13:14.464956] Epoch: [0]  [  160/15468]  eta: 22:39:14  lr: 0.000000  pix_loss: 1.5537 (1.6821)  pix_loss_CNN: 1.4702 (1.4824)  time: 4.9828  data: 0.0000  max mem: 56958
+[20:14:55.731844] Epoch: [0]  [  180/15468]  eta: 22:30:01  lr: 0.000000  pix_loss: 1.5345 (1.6667)  pix_loss_CNN: 1.5173 (1.4858)  time: 5.0633  data: 0.0000  max mem: 56958
+[20:16:35.767667] Epoch: [0]  [  200/15468]  eta: 22:20:44  lr: 0.000000  pix_loss: 1.4467 (1.6459)  pix_loss_CNN: 1.4653 (1.4853)  time: 5.0018  data: 0.0000  max mem: 56958
+[20:18:18.015135] Epoch: [0]  [  220/15468]  eta: 22:15:23  lr: 0.000000  pix_loss: 1.3927 (1.6237)  pix_loss_CNN: 1.4595 (1.4846)  time: 5.1123  data: 0.0000  max mem: 56958
+[20:20:01.113772] Epoch: [0]  [  240/15468]  eta: 22:11:32  lr: 0.000000  pix_loss: 1.3614 (1.6027)  pix_loss_CNN: 1.4906 (1.4852)  time: 5.1549  data: 0.0000  max mem: 56958
+[20:21:41.473940] Epoch: [0]  [  260/15468]  eta: 22:05:21  lr: 0.000000  pix_loss: 1.3259 (1.5826)  pix_loss_CNN: 1.5024 (1.4860)  time: 5.0180  data: 0.0000  max mem: 56958
+[20:23:22.050677] Epoch: [0]  [  280/15468]  eta: 22:00:00  lr: 0.000000  pix_loss: 1.2488 (1.5598)  pix_loss_CNN: 1.4818 (1.4852)  time: 5.0288  data: 0.0000  max mem: 56958
+[20:24:59.004448] Epoch: [0]  [  300/15468]  eta: 21:52:05  lr: 0.000000  pix_loss: 1.2262 (1.5401)  pix_loss_CNN: 1.4716 (1.4859)  time: 4.8476  data: 0.0000  max mem: 56958
+[20:26:34.777659] Epoch: [0]  [  320/15468]  eta: 21:44:03  lr: 0.000001  pix_loss: 1.2072 (1.5197)  pix_loss_CNN: 1.4717 (1.4858)  time: 4.7886  data: 0.0000  max mem: 56958
+[20:28:12.583465] Epoch: [0]  [  340/15468]  eta: 21:38:15  lr: 0.000001  pix_loss: 1.1744 (1.5002)  pix_loss_CNN: 1.4822 (1.4863)  time: 4.8902  data: 0.0000  max mem: 56958
+[20:29:49.281098] Epoch: [0]  [  360/15468]  eta: 21:32:09  lr: 0.000001  pix_loss: 1.1158 (1.4789)  pix_loss_CNN: 1.4645 (1.4848)  time: 4.8348  data: 0.0000  max mem: 56958
+[20:31:26.618268] Epoch: [0]  [  380/15468]  eta: 21:26:57  lr: 0.000001  pix_loss: 1.0724 (1.4580)  pix_loss_CNN: 1.4469 (1.4832)  time: 4.8668  data: 0.0000  max mem: 56958
+[20:33:06.183737] Epoch: [0]  [  400/15468]  eta: 21:23:30  lr: 0.000001  pix_loss: 1.0972 (1.4396)  pix_loss_CNN: 1.4676 (1.4827)  time: 4.9782  data: 0.0000  max mem: 56958
+[20:34:45.943574] Epoch: [0]  [  420/15468]  eta: 21:20:20  lr: 0.000001  pix_loss: 1.0066 (1.4204)  pix_loss_CNN: 1.4371 (1.4813)  time: 4.9880  data: 0.0000  max mem: 56958
+[20:36:27.747527] Epoch: [0]  [  440/15468]  eta: 21:18:27  lr: 0.000001  pix_loss: 1.0802 (1.4048)  pix_loss_CNN: 1.5037 (1.4822)  time: 5.0902  data: 0.0000  max mem: 56958
+[20:38:05.038642] Epoch: [0]  [  460/15468]  eta: 21:14:09  lr: 0.000001  pix_loss: 1.0861 (1.3892)  pix_loss_CNN: 1.5197 (1.4830)  time: 4.8645  data: 0.0000  max mem: 56958
+[20:39:39.799949] Epoch: [0]  [  480/15468]  eta: 21:08:45  lr: 0.000001  pix_loss: 0.9680 (1.3717)  pix_loss_CNN: 1.4662 (1.4820)  time: 4.7380  data: 0.0000  max mem: 56958
+[20:41:19.241865] Epoch: [0]  [  500/15468]  eta: 21:06:00  lr: 0.000001  pix_loss: 0.9913 (1.3566)  pix_loss_CNN: 1.4785 (1.4824)  time: 4.9721  data: 0.0000  max mem: 56958
+[20:42:57.549524] Epoch: [0]  [  520/15468]  eta: 21:02:47  lr: 0.000001  pix_loss: 0.9532 (1.3409)  pix_loss_CNN: 1.4434 (1.4813)  time: 4.9153  data: 0.0000  max mem: 56958
+[20:44:34.450936] Epoch: [0]  [  540/15468]  eta: 20:59:02  lr: 0.000001  pix_loss: 0.9428 (1.3268)  pix_loss_CNN: 1.4839 (1.4818)  time: 4.8450  data: 0.0000  max mem: 56958
+[20:46:13.286041] Epoch: [0]  [  560/15468]  eta: 20:56:18  lr: 0.000001  pix_loss: 0.9230 (1.3130)  pix_loss_CNN: 1.4702 (1.4818)  time: 4.9417  data: 0.0000  max mem: 56958
+[20:47:51.361211] Epoch: [0]  [  580/15468]  eta: 20:53:18  lr: 0.000001  pix_loss: 0.9114 (1.2989)  pix_loss_CNN: 1.4806 (1.4813)  time: 4.9037  data: 0.0000  max mem: 56958
+[20:49:28.616653] Epoch: [0]  [  600/15468]  eta: 20:50:04  lr: 0.000001  pix_loss: 0.8742 (1.2849)  pix_loss_CNN: 1.4653 (1.4805)  time: 4.8627  data: 0.0000  max mem: 56958
+[20:51:01.750491] Epoch: [0]  [  620/15468]  eta: 20:45:18  lr: 0.000001  pix_loss: 0.8594 (1.2715)  pix_loss_CNN: 1.4547 (1.4796)  time: 4.6566  data: 0.0000  max mem: 56958
+[20:52:39.448470] Epoch: [0]  [  640/15468]  eta: 20:42:29  lr: 0.000001  pix_loss: 0.8550 (1.2589)  pix_loss_CNN: 1.4628 (1.4793)  time: 4.8849  data: 0.0000  max mem: 56958
+[20:54:17.301198] Epoch: [0]  [  660/15468]  eta: 20:39:48  lr: 0.000001  pix_loss: 0.8579 (1.2471)  pix_loss_CNN: 1.4865 (1.4798)  time: 4.8926  data: 0.0000  max mem: 56958
+[20:55:51.861449] Epoch: [0]  [  680/15468]  eta: 20:35:59  lr: 0.000001  pix_loss: 0.9130 (1.2373)  pix_loss_CNN: 1.5143 (1.4808)  time: 4.7280  data: 0.0000  max mem: 56958
+[20:57:32.020668] Epoch: [0]  [  700/15468]  eta: 20:34:16  lr: 0.000001  pix_loss: 0.8365 (1.2263)  pix_loss_CNN: 1.4432 (1.4806)  time: 5.0079  data: 0.0000  max mem: 56958
+[20:59:08.959074] Epoch: [0]  [  720/15468]  eta: 20:31:27  lr: 0.000001  pix_loss: 0.8145 (1.2153)  pix_loss_CNN: 1.4619 (1.4803)  time: 4.8469  data: 0.0000  max mem: 56958
+[21:00:45.091566] Epoch: [0]  [  740/15468]  eta: 20:28:26  lr: 0.000001  pix_loss: 0.8277 (1.2052)  pix_loss_CNN: 1.4712 (1.4804)  time: 4.8066  data: 0.0000  max mem: 56958
+[21:02:23.007755] Epoch: [0]  [  760/15468]  eta: 20:26:04  lr: 0.000001  pix_loss: 0.8294 (1.1955)  pix_loss_CNN: 1.4751 (1.4808)  time: 4.8958  data: 0.0000  max mem: 56958
+[21:03:55.347704] Epoch: [0]  [  780/15468]  eta: 20:21:59  lr: 0.000001  pix_loss: 0.7539 (1.1844)  pix_loss_CNN: 1.4370 (1.4798)  time: 4.6170  data: 0.0000  max mem: 56958
+[21:05:26.548420] Epoch: [0]  [  800/15468]  eta: 20:17:41  lr: 0.000001  pix_loss: 0.7851 (1.1746)  pix_loss_CNN: 1.4557 (1.4793)  time: 4.5600  data: 0.0000  max mem: 56958
+[21:07:03.001322] Epoch: [0]  [  820/15468]  eta: 20:15:05  lr: 0.000001  pix_loss: 0.8312 (1.1662)  pix_loss_CNN: 1.4870 (1.4795)  time: 4.8226  data: 0.0000  max mem: 56958
+[21:08:41.911388] Epoch: [0]  [  840/15468]  eta: 20:13:14  lr: 0.000001  pix_loss: 0.7379 (1.1563)  pix_loss_CNN: 1.4509 (1.4789)  time: 4.9455  data: 0.0000  max mem: 56958
+[21:10:19.143520] Epoch: [0]  [  860/15468]  eta: 20:10:56  lr: 0.000001  pix_loss: 0.7338 (1.1469)  pix_loss_CNN: 1.4371 (1.4782)  time: 4.8616  data: 0.0000  max mem: 56958
+[21:11:56.205595] Epoch: [0]  [  880/15468]  eta: 20:08:36  lr: 0.000001  pix_loss: 0.7364 (1.1379)  pix_loss_CNN: 1.4361 (1.4777)  time: 4.8531  data: 0.0000  max mem: 56958
+[21:13:32.044174] Epoch: [0]  [  900/15468]  eta: 20:05:59  lr: 0.000001  pix_loss: 0.7552 (1.1295)  pix_loss_CNN: 1.4569 (1.4776)  time: 4.7919  data: 0.0000  max mem: 56958
+[21:15:05.776025] Epoch: [0]  [  920/15468]  eta: 20:02:51  lr: 0.000001  pix_loss: 0.7505 (1.1213)  pix_loss_CNN: 1.4644 (1.4774)  time: 4.6866  data: 0.0000  max mem: 56958
+[21:16:40.661614] Epoch: [0]  [  940/15468]  eta: 20:00:05  lr: 0.000002  pix_loss: 0.6974 (1.1126)  pix_loss_CNN: 1.4516 (1.4768)  time: 4.7442  data: 0.0000  max mem: 56958
+[21:18:16.208509] Epoch: [0]  [  960/15468]  eta: 19:57:32  lr: 0.000002  pix_loss: 0.7779 (1.1055)  pix_loss_CNN: 1.5015 (1.4773)  time: 4.7773  data: 0.0000  max mem: 56958
+[21:19:53.449139] Epoch: [0]  [  980/15468]  eta: 19:55:26  lr: 0.000002  pix_loss: 0.6815 (1.0972)  pix_loss_CNN: 1.4345 (1.4768)  time: 4.8620  data: 0.0000  max mem: 56958
+[21:21:27.662538] Epoch: [0]  [ 1000/15468]  eta: 19:52:38  lr: 0.000002  pix_loss: 0.6948 (1.0892)  pix_loss_CNN: 1.4345 (1.4761)  time: 4.7106  data: 0.0000  max mem: 56958
+[21:23:03.336260] Epoch: [0]  [ 1020/15468]  eta: 19:50:13  lr: 0.000002  pix_loss: 0.7113 (1.0819)  pix_loss_CNN: 1.4595 (1.4758)  time: 4.7836  data: 0.0000  max mem: 56958
+[21:24:36.860247] Epoch: [0]  [ 1040/15468]  eta: 19:47:20  lr: 0.000002  pix_loss: 0.6744 (1.0743)  pix_loss_CNN: 1.4528 (1.4755)  time: 4.6762  data: 0.0000  max mem: 56958
+[21:26:13.976854] Epoch: [0]  [ 1060/15468]  eta: 19:45:19  lr: 0.000002  pix_loss: 0.6962 (1.0672)  pix_loss_CNN: 1.4618 (1.4754)  time: 4.8558  data: 0.0000  max mem: 56958
+[21:27:48.280266] Epoch: [0]  [ 1080/15468]  eta: 19:42:41  lr: 0.000002  pix_loss: 0.6520 (1.0598)  pix_loss_CNN: 1.4317 (1.4748)  time: 4.7151  data: 0.0000  max mem: 56958
+[21:29:24.871157] Epoch: [0]  [ 1100/15468]  eta: 19:40:36  lr: 0.000002  pix_loss: 0.6947 (1.0528)  pix_loss_CNN: 1.4282 (1.4742)  time: 4.8295  data: 0.0000  max mem: 56958
+[21:30:59.350737] Epoch: [0]  [ 1120/15468]  eta: 19:38:05  lr: 0.000002  pix_loss: 0.6762 (1.0463)  pix_loss_CNN: 1.4527 (1.4738)  time: 4.7239  data: 0.0000  max mem: 56958
+[21:32:35.474274] Epoch: [0]  [ 1140/15468]  eta: 19:35:56  lr: 0.000002  pix_loss: 0.6927 (1.0398)  pix_loss_CNN: 1.4559 (1.4738)  time: 4.8061  data: 0.0000  max mem: 56958
+[21:34:10.019876] Epoch: [0]  [ 1160/15468]  eta: 19:33:29  lr: 0.000002  pix_loss: 0.6851 (1.0337)  pix_loss_CNN: 1.4520 (1.4735)  time: 4.7272  data: 0.0000  max mem: 56958
+[21:35:44.342295] Epoch: [0]  [ 1180/15468]  eta: 19:31:01  lr: 0.000002  pix_loss: 0.6643 (1.0273)  pix_loss_CNN: 1.4371 (1.4732)  time: 4.7161  data: 0.0000  max mem: 56958
+[21:37:21.889585] Epoch: [0]  [ 1200/15468]  eta: 19:29:13  lr: 0.000002  pix_loss: 0.6680 (1.0209)  pix_loss_CNN: 1.4488 (1.4726)  time: 4.8773  data: 0.0000  max mem: 56958
+[21:38:56.329615] Epoch: [0]  [ 1220/15468]  eta: 19:26:49  lr: 0.000002  pix_loss: 0.6711 (1.0150)  pix_loss_CNN: 1.4428 (1.4722)  time: 4.7220  data: 0.0000  max mem: 56958
+[21:40:32.883905] Epoch: [0]  [ 1240/15468]  eta: 19:24:51  lr: 0.000002  pix_loss: 0.6864 (1.0098)  pix_loss_CNN: 1.4566 (1.4722)  time: 4.8277  data: 0.0000  max mem: 56958
+[21:42:08.592040] Epoch: [0]  [ 1260/15468]  eta: 19:22:44  lr: 0.000002  pix_loss: 0.6045 (1.0034)  pix_loss_CNN: 1.3994 (1.4713)  time: 4.7854  data: 0.0000  max mem: 56958
+[21:43:45.440238] Epoch: [0]  [ 1280/15468]  eta: 19:20:51  lr: 0.000002  pix_loss: 0.6354 (0.9978)  pix_loss_CNN: 1.4185 (1.4707)  time: 4.8424  data: 0.0000  max mem: 56958
+[21:45:18.769087] Epoch: [0]  [ 1300/15468]  eta: 19:18:20  lr: 0.000002  pix_loss: 0.6202 (0.9924)  pix_loss_CNN: 1.4192 (1.4703)  time: 4.6664  data: 0.0000  max mem: 56958
+[21:46:50.675429] Epoch: [0]  [ 1320/15468]  eta: 19:15:35  lr: 0.000002  pix_loss: 0.6555 (0.9871)  pix_loss_CNN: 1.4435 (1.4699)  time: 4.5953  data: 0.0000  max mem: 56958
+[21:48:26.716661] Epoch: [0]  [ 1340/15468]  eta: 19:13:37  lr: 0.000002  pix_loss: 0.5788 (0.9813)  pix_loss_CNN: 1.4007 (1.4690)  time: 4.8020  data: 0.0000  max mem: 56958
+[21:50:03.696941] Epoch: [0]  [ 1360/15468]  eta: 19:11:48  lr: 0.000002  pix_loss: 0.5890 (0.9758)  pix_loss_CNN: 1.4051 (1.4682)  time: 4.8490  data: 0.0000  max mem: 56958
+[21:51:41.501914] Epoch: [0]  [ 1380/15468]  eta: 19:10:08  lr: 0.000002  pix_loss: 0.6193 (0.9708)  pix_loss_CNN: 1.4228 (1.4677)  time: 4.8902  data: 0.0000  max mem: 56958
+[21:53:18.558590] Epoch: [0]  [ 1400/15468]  eta: 19:08:21  lr: 0.000002  pix_loss: 0.5892 (0.9658)  pix_loss_CNN: 1.3967 (1.4671)  time: 4.8528  data: 0.0000  max mem: 56958
+[21:54:52.450560] Epoch: [0]  [ 1420/15468]  eta: 19:06:03  lr: 0.000002  pix_loss: 0.5905 (0.9606)  pix_loss_CNN: 1.3876 (1.4660)  time: 4.6946  data: 0.0000  max mem: 56958
+[21:56:28.255792] Epoch: [0]  [ 1440/15468]  eta: 19:04:05  lr: 0.000002  pix_loss: 0.5784 (0.9556)  pix_loss_CNN: 1.3901 (1.4652)  time: 4.7902  data: 0.0000  max mem: 56958
+[21:58:04.350306] Epoch: [0]  [ 1460/15468]  eta: 19:02:10  lr: 0.000002  pix_loss: 0.5844 (0.9508)  pix_loss_CNN: 1.3863 (1.4644)  time: 4.8047  data: 0.0000  max mem: 56958
+[21:59:39.139060] Epoch: [0]  [ 1480/15468]  eta: 19:00:03  lr: 0.000002  pix_loss: 0.5649 (0.9460)  pix_loss_CNN: 1.3875 (1.4637)  time: 4.7394  data: 0.0000  max mem: 56958
+[22:01:13.971520] Epoch: [0]  [ 1500/15468]  eta: 18:57:58  lr: 0.000002  pix_loss: 0.6304 (0.9419)  pix_loss_CNN: 1.4134 (1.4631)  time: 4.7416  data: 0.0000  max mem: 56958
+[22:02:47.763828] Epoch: [0]  [ 1520/15468]  eta: 18:55:44  lr: 0.000002  pix_loss: 0.6106 (0.9377)  pix_loss_CNN: 1.3991 (1.4624)  time: 4.6896  data: 0.0000  max mem: 56958
+[22:04:24.933137] Epoch: [0]  [ 1540/15468]  eta: 18:54:01  lr: 0.000002  pix_loss: 0.5868 (0.9335)  pix_loss_CNN: 1.3902 (1.4617)  time: 4.8584  data: 0.0000  max mem: 56958
+[22:05:58.842292] Epoch: [0]  [ 1560/15468]  eta: 18:51:50  lr: 0.000003  pix_loss: 0.6120 (0.9297)  pix_loss_CNN: 1.4006 (1.4612)  time: 4.6954  data: 0.0000  max mem: 56958
+[22:07:47.960032] Epoch: [0]  [ 1580/15468]  eta: 18:51:53  lr: 0.000003  pix_loss: 0.5580 (0.9254)  pix_loss_CNN: 1.3682 (1.4602)  time: 5.4558  data: 0.0000  max mem: 56958
+[22:09:29.464370] Epoch: [0]  [ 1600/15468]  eta: 18:50:47  lr: 0.000003  pix_loss: 0.5964 (0.9216)  pix_loss_CNN: 1.3676 (1.4594)  time: 5.0752  data: 0.0000  max mem: 56958
+[22:11:05.018144] Epoch: [0]  [ 1620/15468]  eta: 18:48:49  lr: 0.000003  pix_loss: 0.6377 (0.9177)  pix_loss_CNN: 1.4236 (1.4587)  time: 4.7776  data: 0.0000  max mem: 56958
+[22:12:38.152143] Epoch: [0]  [ 1640/15468]  eta: 18:46:32  lr: 0.000003  pix_loss: 0.6063 (0.9141)  pix_loss_CNN: 1.3815 (1.4580)  time: 4.6567  data: 0.0000  max mem: 56958
+[22:14:15.112915] Epoch: [0]  [ 1660/15468]  eta: 18:44:48  lr: 0.000003  pix_loss: 0.6182 (0.9104)  pix_loss_CNN: 1.3838 (1.4573)  time: 4.8480  data: 0.0000  max mem: 56958
+[22:15:52.333855] Epoch: [0]  [ 1680/15468]  eta: 18:43:06  lr: 0.000003  pix_loss: 0.5930 (0.9068)  pix_loss_CNN: 1.3818 (1.4565)  time: 4.8610  data: 0.0000  max mem: 56958
+[22:17:29.591014] Epoch: [0]  [ 1700/15468]  eta: 18:41:24  lr: 0.000003  pix_loss: 0.5959 (0.9034)  pix_loss_CNN: 1.3834 (1.4558)  time: 4.8628  data: 0.0000  max mem: 56958
+[22:19:04.334299] Epoch: [0]  [ 1720/15468]  eta: 18:39:22  lr: 0.000003  pix_loss: 0.5923 (0.9000)  pix_loss_CNN: 1.3715 (1.4550)  time: 4.7371  data: 0.0000  max mem: 56958
+[22:20:38.401844] Epoch: [0]  [ 1740/15468]  eta: 18:37:16  lr: 0.000003  pix_loss: 0.6080 (0.8967)  pix_loss_CNN: 1.3861 (1.4541)  time: 4.7033  data: 0.0000  max mem: 56958
+[22:22:13.759906] Epoch: [0]  [ 1760/15468]  eta: 18:35:20  lr: 0.000003  pix_loss: 0.5771 (0.8933)  pix_loss_CNN: 1.3329 (1.4531)  time: 4.7679  data: 0.0000  max mem: 56958
+[22:23:51.359812] Epoch: [0]  [ 1780/15468]  eta: 18:33:42  lr: 0.000003  pix_loss: 0.5536 (0.8898)  pix_loss_CNN: 1.3394 (1.4521)  time: 4.8800  data: 0.0000  max mem: 56958
+[22:25:25.926838] Epoch: [0]  [ 1800/15468]  eta: 18:31:41  lr: 0.000003  pix_loss: 0.5603 (0.8863)  pix_loss_CNN: 1.3291 (1.4508)  time: 4.7283  data: 0.0000  max mem: 56958
+[22:27:03.873513] Epoch: [0]  [ 1820/15468]  eta: 18:30:06  lr: 0.000003  pix_loss: 0.5673 (0.8831)  pix_loss_CNN: 1.3567 (1.4498)  time: 4.8973  data: 0.0000  max mem: 56958
+[22:28:38.599596] Epoch: [0]  [ 1840/15468]  eta: 18:28:07  lr: 0.000003  pix_loss: 0.5378 (0.8796)  pix_loss_CNN: 1.3229 (1.4484)  time: 4.7363  data: 0.0000  max mem: 56958
+[22:30:06.311111] Epoch: [0]  [ 1860/15468]  eta: 18:25:18  lr: 0.000003  pix_loss: 0.6090 (0.8767)  pix_loss_CNN: 1.3515 (1.4474)  time: 4.3855  data: 0.0000  max mem: 56958
+[22:31:41.656122] Epoch: [0]  [ 1880/15468]  eta: 18:23:25  lr: 0.000003  pix_loss: 0.5727 (0.8735)  pix_loss_CNN: 1.3267 (1.4463)  time: 4.7672  data: 0.0000  max mem: 56958
+[22:33:16.714034] Epoch: [0]  [ 1900/15468]  eta: 18:21:30  lr: 0.000003  pix_loss: 0.5662 (0.8703)  pix_loss_CNN: 1.3106 (1.4450)  time: 4.7529  data: 0.0000  max mem: 56958
+[22:34:50.216942] Epoch: [0]  [ 1920/15468]  eta: 18:19:25  lr: 0.000003  pix_loss: 0.5675 (0.8673)  pix_loss_CNN: 1.3338 (1.4440)  time: 4.6751  data: 0.0000  max mem: 56958
+[22:36:27.978109] Epoch: [0]  [ 1940/15468]  eta: 18:17:50  lr: 0.000003  pix_loss: 0.5944 (0.8644)  pix_loss_CNN: 1.3380 (1.4428)  time: 4.8880  data: 0.0000  max mem: 56958
+[22:38:00.939878] Epoch: [0]  [ 1960/15468]  eta: 18:15:43  lr: 0.000003  pix_loss: 0.5878 (0.8616)  pix_loss_CNN: 1.3444 (1.4418)  time: 4.6480  data: 0.0000  max mem: 56958
+[22:39:37.937966] Epoch: [0]  [ 1980/15468]  eta: 18:14:03  lr: 0.000003  pix_loss: 0.5884 (0.8590)  pix_loss_CNN: 1.3493 (1.4408)  time: 4.8499  data: 0.0000  max mem: 56958
+[22:41:12.271842] Epoch: [0]  [ 2000/15468]  eta: 18:12:05  lr: 0.000003  pix_loss: 0.5587 (0.8562)  pix_loss_CNN: 1.3279 (1.4398)  time: 4.7167  data: 0.0000  max mem: 56958
+[22:42:46.199890] Epoch: [0]  [ 2020/15468]  eta: 18:10:06  lr: 0.000003  pix_loss: 0.5661 (0.8535)  pix_loss_CNN: 1.2943 (1.4387)  time: 4.6964  data: 0.0000  max mem: 56958
+[22:44:20.088387] Epoch: [0]  [ 2040/15468]  eta: 18:08:06  lr: 0.000003  pix_loss: 0.5302 (0.8503)  pix_loss_CNN: 1.2689 (1.4371)  time: 4.6944  data: 0.0000  max mem: 56958
+[22:45:53.413751] Epoch: [0]  [ 2060/15468]  eta: 18:06:03  lr: 0.000003  pix_loss: 0.5631 (0.8474)  pix_loss_CNN: 1.2757 (1.4357)  time: 4.6662  data: 0.0000  max mem: 56958
+[22:47:25.924820] Epoch: [0]  [ 2080/15468]  eta: 18:03:56  lr: 0.000003  pix_loss: 0.5301 (0.8445)  pix_loss_CNN: 1.2649 (1.4343)  time: 4.6255  data: 0.0000  max mem: 56958
+[22:49:02.678665] Epoch: [0]  [ 2100/15468]  eta: 18:02:16  lr: 0.000003  pix_loss: 0.5273 (0.8418)  pix_loss_CNN: 1.2738 (1.4330)  time: 4.8377  data: 0.0000  max mem: 56958
+[22:50:34.350890] Epoch: [0]  [ 2120/15468]  eta: 18:00:05  lr: 0.000003  pix_loss: 0.5355 (0.8389)  pix_loss_CNN: 1.2633 (1.4315)  time: 4.5836  data: 0.0000  max mem: 56958
+[22:52:11.698738] Epoch: [0]  [ 2140/15468]  eta: 17:58:29  lr: 0.000003  pix_loss: 0.4999 (0.8357)  pix_loss_CNN: 1.2542 (1.4299)  time: 4.8674  data: 0.0000  max mem: 56958
+[22:53:44.730886] Epoch: [0]  [ 2160/15468]  eta: 17:56:27  lr: 0.000003  pix_loss: 0.4980 (0.8326)  pix_loss_CNN: 1.2579 (1.4284)  time: 4.6516  data: 0.0000  max mem: 56958
+[22:55:16.491844] Epoch: [0]  [ 2180/15468]  eta: 17:54:17  lr: 0.000004  pix_loss: 0.5265 (0.8297)  pix_loss_CNN: 1.2394 (1.4268)  time: 4.5880  data: 0.0000  max mem: 56958
+[22:56:52.510923] Epoch: [0]  [ 2200/15468]  eta: 17:52:34  lr: 0.000004  pix_loss: 0.4946 (0.8269)  pix_loss_CNN: 1.2477 (1.4254)  time: 4.8009  data: 0.0000  max mem: 56958
+[22:58:29.977387] Epoch: [0]  [ 2220/15468]  eta: 17:51:00  lr: 0.000004  pix_loss: 0.5219 (0.8241)  pix_loss_CNN: 1.2573 (1.4240)  time: 4.8733  data: 0.0000  max mem: 56958
+[23:00:06.145005] Epoch: [0]  [ 2240/15468]  eta: 17:49:18  lr: 0.000004  pix_loss: 0.5019 (0.8214)  pix_loss_CNN: 1.2552 (1.4226)  time: 4.8083  data: 0.0000  max mem: 56958
+[23:01:39.676793] Epoch: [0]  [ 2260/15468]  eta: 17:47:21  lr: 0.000004  pix_loss: 0.4825 (0.8185)  pix_loss_CNN: 1.2379 (1.4209)  time: 4.6765  data: 0.0000  max mem: 56958
+[23:03:22.640711] Epoch: [0]  [ 2280/15468]  eta: 17:46:19  lr: 0.000004  pix_loss: 0.4873 (0.8156)  pix_loss_CNN: 1.2189 (1.4193)  time: 5.1482  data: 0.0000  max mem: 56958
+[23:04:53.133107] Epoch: [0]  [ 2300/15468]  eta: 17:44:04  lr: 0.000004  pix_loss: 0.5148 (0.8130)  pix_loss_CNN: 1.2715 (1.4179)  time: 4.5246  data: 0.0000  max mem: 56958
+[23:06:27.528626] Epoch: [0]  [ 2320/15468]  eta: 17:42:13  lr: 0.000004  pix_loss: 0.4895 (0.8103)  pix_loss_CNN: 1.2155 (1.4163)  time: 4.7197  data: 0.0000  max mem: 56958
+[23:08:00.915202] Epoch: [0]  [ 2340/15468]  eta: 17:40:16  lr: 0.000004  pix_loss: 0.4788 (0.8075)  pix_loss_CNN: 1.2232 (1.4147)  time: 4.6693  data: 0.0000  max mem: 56958
+[23:09:36.958526] Epoch: [0]  [ 2360/15468]  eta: 17:38:34  lr: 0.000004  pix_loss: 0.4662 (0.8047)  pix_loss_CNN: 1.1722 (1.4128)  time: 4.8021  data: 0.0000  max mem: 56958
+[23:11:13.238219] Epoch: [0]  [ 2380/15468]  eta: 17:36:53  lr: 0.000004  pix_loss: 0.5096 (0.8021)  pix_loss_CNN: 1.1990 (1.4111)  time: 4.8139  data: 0.0000  max mem: 56958
+[23:12:48.615580] Epoch: [0]  [ 2400/15468]  eta: 17:35:08  lr: 0.000004  pix_loss: 0.4759 (0.7994)  pix_loss_CNN: 1.1981 (1.4094)  time: 4.7688  data: 0.0000  max mem: 56958
+[23:14:20.687650] Epoch: [0]  [ 2420/15468]  eta: 17:33:05  lr: 0.000004  pix_loss: 0.4641 (0.7967)  pix_loss_CNN: 1.2064 (1.4076)  time: 4.6036  data: 0.0000  max mem: 56958
+[23:15:54.837662] Epoch: [0]  [ 2440/15468]  eta: 17:31:14  lr: 0.000004  pix_loss: 0.4456 (0.7939)  pix_loss_CNN: 1.1604 (1.4057)  time: 4.7075  data: 0.0000  max mem: 56958
+[23:17:29.149608] Epoch: [0]  [ 2460/15468]  eta: 17:29:24  lr: 0.000004  pix_loss: 0.4992 (0.7916)  pix_loss_CNN: 1.2119 (1.4041)  time: 4.7156  data: 0.0000  max mem: 56958
+[23:19:06.556894] Epoch: [0]  [ 2480/15468]  eta: 17:27:50  lr: 0.000004  pix_loss: 0.4771 (0.7891)  pix_loss_CNN: 1.1865 (1.4023)  time: 4.8703  data: 0.0000  max mem: 56958
+[23:20:41.431991] Epoch: [0]  [ 2500/15468]  eta: 17:26:03  lr: 0.000004  pix_loss: 0.4273 (0.7864)  pix_loss_CNN: 1.1698 (1.4005)  time: 4.7437  data: 0.0000  max mem: 56958
+[23:22:16.401116] Epoch: [0]  [ 2520/15468]  eta: 17:24:17  lr: 0.000004  pix_loss: 0.4626 (0.7840)  pix_loss_CNN: 1.1580 (1.3985)  time: 4.7484  data: 0.0000  max mem: 56958
+[23:23:51.318140] Epoch: [0]  [ 2540/15468]  eta: 17:22:31  lr: 0.000004  pix_loss: 0.4817 (0.7817)  pix_loss_CNN: 1.1721 (1.3968)  time: 4.7458  data: 0.0000  max mem: 56958
+[23:25:26.232769] Epoch: [0]  [ 2560/15468]  eta: 17:20:45  lr: 0.000004  pix_loss: 0.4581 (0.7793)  pix_loss_CNN: 1.1817 (1.3950)  time: 4.7457  data: 0.0000  max mem: 56958
+[23:26:58.126880] Epoch: [0]  [ 2580/15468]  eta: 17:18:44  lr: 0.000004  pix_loss: 0.5021 (0.7771)  pix_loss_CNN: 1.1662 (1.3932)  time: 4.5947  data: 0.0000  max mem: 56958
+[23:28:30.961433] Epoch: [0]  [ 2600/15468]  eta: 17:16:48  lr: 0.000004  pix_loss: 0.4446 (0.7746)  pix_loss_CNN: 1.1191 (1.3912)  time: 4.6417  data: 0.0000  max mem: 56958
+[23:30:06.854151] Epoch: [0]  [ 2620/15468]  eta: 17:15:07  lr: 0.000004  pix_loss: 0.4382 (0.7721)  pix_loss_CNN: 1.0797 (1.3890)  time: 4.7946  data: 0.0000  max mem: 56958
+[23:31:41.392505] Epoch: [0]  [ 2640/15468]  eta: 17:13:20  lr: 0.000004  pix_loss: 0.4685 (0.7698)  pix_loss_CNN: 1.1343 (1.3871)  time: 4.7269  data: 0.0000  max mem: 56958
+[23:33:13.814400] Epoch: [0]  [ 2660/15468]  eta: 17:11:23  lr: 0.000004  pix_loss: 0.4591 (0.7675)  pix_loss_CNN: 1.1265 (1.3849)  time: 4.6211  data: 0.0000  max mem: 56958
+[23:34:49.027707] Epoch: [0]  [ 2680/15468]  eta: 17:09:40  lr: 0.000004  pix_loss: 0.4666 (0.7652)  pix_loss_CNN: 1.1084 (1.3828)  time: 4.7606  data: 0.0000  max mem: 56958
+[23:36:23.549487] Epoch: [0]  [ 2700/15468]  eta: 17:07:53  lr: 0.000004  pix_loss: 0.4670 (0.7630)  pix_loss_CNN: 1.1220 (1.3809)  time: 4.7261  data: 0.0000  max mem: 56958
+[23:37:51.661107] Epoch: [0]  [ 2720/15468]  eta: 17:05:37  lr: 0.000004  pix_loss: 0.4361 (0.7606)  pix_loss_CNN: 1.0500 (1.3785)  time: 4.4055  data: 0.0000  max mem: 56958
+[23:39:27.552278] Epoch: [0]  [ 2740/15468]  eta: 17:03:57  lr: 0.000004  pix_loss: 0.4676 (0.7585)  pix_loss_CNN: 1.0654 (1.3762)  time: 4.7945  data: 0.0000  max mem: 56958
+[23:41:09.990903] Epoch: [0]  [ 2760/15468]  eta: 17:02:48  lr: 0.000004  pix_loss: 0.4573 (0.7564)  pix_loss_CNN: 1.0882 (1.3740)  time: 5.1219  data: 0.0000  max mem: 56958
+[23:42:42.895271] Epoch: [0]  [ 2780/15468]  eta: 17:00:54  lr: 0.000004  pix_loss: 0.4759 (0.7544)  pix_loss_CNN: 1.0821 (1.3720)  time: 4.6452  data: 0.0000  max mem: 56958
+[23:44:18.188858] Epoch: [0]  [ 2800/15468]  eta: 16:59:12  lr: 0.000005  pix_loss: 0.4470 (0.7523)  pix_loss_CNN: 1.0634 (1.3700)  time: 4.7646  data: 0.0000  max mem: 56958
+[23:45:53.003343] Epoch: [0]  [ 2820/15468]  eta: 16:57:28  lr: 0.000005  pix_loss: 0.4562 (0.7503)  pix_loss_CNN: 1.0515 (1.3679)  time: 4.7407  data: 0.0000  max mem: 56958
+[23:47:27.459466] Epoch: [0]  [ 2840/15468]  eta: 16:55:42  lr: 0.000005  pix_loss: 0.4516 (0.7482)  pix_loss_CNN: 1.0864 (1.3658)  time: 4.7228  data: 0.0000  max mem: 56958
+[23:49:02.139220] Epoch: [0]  [ 2860/15468]  eta: 16:53:57  lr: 0.000005  pix_loss: 0.4462 (0.7462)  pix_loss_CNN: 1.0425 (1.3636)  time: 4.7339  data: 0.0000  max mem: 56958
+[23:50:36.844117] Epoch: [0]  [ 2880/15468]  eta: 16:52:13  lr: 0.000005  pix_loss: 0.4273 (0.7440)  pix_loss_CNN: 1.0074 (1.3611)  time: 4.7352  data: 0.0000  max mem: 56958
+[23:52:11.619007] Epoch: [0]  [ 2900/15468]  eta: 16:50:29  lr: 0.000005  pix_loss: 0.4587 (0.7420)  pix_loss_CNN: 1.0305 (1.3588)  time: 4.7387  data: 0.0000  max mem: 56958
+[23:53:41.616950] Epoch: [0]  [ 2920/15468]  eta: 16:48:25  lr: 0.000005  pix_loss: 0.4953 (0.7403)  pix_loss_CNN: 1.0523 (1.3569)  time: 4.4999  data: 0.0000  max mem: 56958
+[23:55:13.639961] Epoch: [0]  [ 2940/15468]  eta: 16:46:29  lr: 0.000005  pix_loss: 0.4568 (0.7384)  pix_loss_CNN: 1.0064 (1.3546)  time: 4.6011  data: 0.0000  max mem: 56958
+[23:56:48.792794] Epoch: [0]  [ 2960/15468]  eta: 16:44:48  lr: 0.000005  pix_loss: 0.4436 (0.7365)  pix_loss_CNN: 0.9696 (1.3522)  time: 4.7576  data: 0.0000  max mem: 56958
+[23:58:23.893479] Epoch: [0]  [ 2980/15468]  eta: 16:43:06  lr: 0.000005  pix_loss: 0.4569 (0.7347)  pix_loss_CNN: 0.9742 (1.3499)  time: 4.7550  data: 0.0000  max mem: 56958
+[23:59:59.646006] Epoch: [0]  [ 3000/15468]  eta: 16:41:27  lr: 0.000005  pix_loss: 0.4709 (0.7330)  pix_loss_CNN: 0.9878 (1.3477)  time: 4.7876  data: 0.0000  max mem: 56958
+[00:01:33.385512] Epoch: [0]  [ 3020/15468]  eta: 16:39:40  lr: 0.000005  pix_loss: 0.4455 (0.7311)  pix_loss_CNN: 0.9645 (1.3454)  time: 4.6869  data: 0.0000  max mem: 56958
+[00:03:08.161600] Epoch: [0]  [ 3040/15468]  eta: 16:37:57  lr: 0.000005  pix_loss: 0.4384 (0.7293)  pix_loss_CNN: 0.9930 (1.3431)  time: 4.7388  data: 0.0000  max mem: 56958
+[00:04:44.812899] Epoch: [0]  [ 3060/15468]  eta: 16:36:22  lr: 0.000005  pix_loss: 0.4380 (0.7274)  pix_loss_CNN: 0.9449 (1.3406)  time: 4.8325  data: 0.0000  max mem: 56958
+[00:06:18.101953] Epoch: [0]  [ 3080/15468]  eta: 16:34:33  lr: 0.000005  pix_loss: 0.4316 (0.7256)  pix_loss_CNN: 0.9621 (1.3383)  time: 4.6644  data: 0.0000  max mem: 56958
+[00:07:59.306597] Epoch: [0]  [ 3100/15468]  eta: 16:33:16  lr: 0.000005  pix_loss: 0.4086 (0.7237)  pix_loss_CNN: 0.9583 (1.3358)  time: 5.0602  data: 0.0000  max mem: 56958
+[00:09:35.629102] Epoch: [0]  [ 3120/15468]  eta: 16:31:39  lr: 0.000005  pix_loss: 0.4411 (0.7219)  pix_loss_CNN: 0.9426 (1.3334)  time: 4.8161  data: 0.0000  max mem: 56958
+[00:11:08.503754] Epoch: [0]  [ 3140/15468]  eta: 16:29:49  lr: 0.000005  pix_loss: 0.4174 (0.7200)  pix_loss_CNN: 0.9431 (1.3310)  time: 4.6437  data: 0.0000  max mem: 56958
+[00:12:43.436269] Epoch: [0]  [ 3160/15468]  eta: 16:28:07  lr: 0.000005  pix_loss: 0.4331 (0.7183)  pix_loss_CNN: 0.9336 (1.3286)  time: 4.7466  data: 0.0000  max mem: 56958
+[00:14:19.827901] Epoch: [0]  [ 3180/15468]  eta: 16:26:31  lr: 0.000005  pix_loss: 0.4062 (0.7164)  pix_loss_CNN: 0.8890 (1.3258)  time: 4.8195  data: 0.0000  max mem: 56958
+[00:15:53.560397] Epoch: [0]  [ 3200/15468]  eta: 16:24:45  lr: 0.000005  pix_loss: 0.4522 (0.7148)  pix_loss_CNN: 0.9754 (1.3237)  time: 4.6866  data: 0.0000  max mem: 56958
+[00:17:28.537392] Epoch: [0]  [ 3220/15468]  eta: 16:23:03  lr: 0.000005  pix_loss: 0.4346 (0.7132)  pix_loss_CNN: 0.9263 (1.3214)  time: 4.7488  data: 0.0000  max mem: 56958
+[00:19:00.391485] Epoch: [0]  [ 3240/15468]  eta: 16:21:10  lr: 0.000005  pix_loss: 0.4519 (0.7115)  pix_loss_CNN: 0.9495 (1.3191)  time: 4.5927  data: 0.0000  max mem: 56958
+[00:20:35.827335] Epoch: [0]  [ 3260/15468]  eta: 16:19:31  lr: 0.000005  pix_loss: 0.4676 (0.7100)  pix_loss_CNN: 0.9449 (1.3169)  time: 4.7717  data: 0.0000  max mem: 56958
+[00:22:10.351590] Epoch: [0]  [ 3280/15468]  eta: 16:17:48  lr: 0.000005  pix_loss: 0.4512 (0.7084)  pix_loss_CNN: 0.8951 (1.3146)  time: 4.7262  data: 0.0000  max mem: 56958
+[00:23:45.534768] Epoch: [0]  [ 3300/15468]  eta: 16:16:08  lr: 0.000005  pix_loss: 0.4507 (0.7068)  pix_loss_CNN: 0.8936 (1.3121)  time: 4.7591  data: 0.0000  max mem: 56958
+[00:25:22.641319] Epoch: [0]  [ 3320/15468]  eta: 16:14:34  lr: 0.000005  pix_loss: 0.4094 (0.7052)  pix_loss_CNN: 0.9457 (1.3099)  time: 4.8553  data: 0.0000  max mem: 56958
+[00:26:59.050165] Epoch: [0]  [ 3340/15468]  eta: 16:12:59  lr: 0.000005  pix_loss: 0.4270 (0.7036)  pix_loss_CNN: 0.9004 (1.3074)  time: 4.8204  data: 0.0000  max mem: 56958
+[00:28:33.753955] Epoch: [0]  [ 3360/15468]  eta: 16:11:17  lr: 0.000005  pix_loss: 0.4550 (0.7020)  pix_loss_CNN: 0.9389 (1.3051)  time: 4.7352  data: 0.0000  max mem: 56958
+[00:30:09.387689] Epoch: [0]  [ 3380/15468]  eta: 16:09:38  lr: 0.000005  pix_loss: 0.4030 (0.7003)  pix_loss_CNN: 0.8762 (1.3026)  time: 4.7816  data: 0.0000  max mem: 56958
+[00:31:41.921049] Epoch: [0]  [ 3400/15468]  eta: 16:07:49  lr: 0.000005  pix_loss: 0.4476 (0.6989)  pix_loss_CNN: 0.8802 (1.3002)  time: 4.6266  data: 0.0000  max mem: 56958
+[00:33:18.021316] Epoch: [0]  [ 3420/15468]  eta: 16:06:12  lr: 0.000006  pix_loss: 0.4344 (0.6973)  pix_loss_CNN: 0.8784 (1.2977)  time: 4.8050  data: 0.0000  max mem: 56958
+[00:34:51.500563] Epoch: [0]  [ 3440/15468]  eta: 16:04:26  lr: 0.000006  pix_loss: 0.4247 (0.6957)  pix_loss_CNN: 0.8748 (1.2952)  time: 4.6739  data: 0.0000  max mem: 56958
+[00:36:25.376513] Epoch: [0]  [ 3460/15468]  eta: 16:02:42  lr: 0.000006  pix_loss: 0.4226 (0.6941)  pix_loss_CNN: 0.8358 (1.2927)  time: 4.6938  data: 0.0000  max mem: 56958
+[00:38:00.103266] Epoch: [0]  [ 3480/15468]  eta: 16:01:01  lr: 0.000006  pix_loss: 0.4339 (0.6926)  pix_loss_CNN: 0.8388 (1.2903)  time: 4.7363  data: 0.0000  max mem: 56958
+[00:39:38.919794] Epoch: [0]  [ 3500/15468]  eta: 15:59:33  lr: 0.000006  pix_loss: 0.4435 (0.6912)  pix_loss_CNN: 0.8762 (1.2879)  time: 4.9408  data: 0.0000  max mem: 56958
+[00:41:12.183157] Epoch: [0]  [ 3520/15468]  eta: 15:57:47  lr: 0.000006  pix_loss: 0.4231 (0.6897)  pix_loss_CNN: 0.8628 (1.2855)  time: 4.6631  data: 0.0000  max mem: 56958
+[00:42:48.400541] Epoch: [0]  [ 3540/15468]  eta: 15:56:11  lr: 0.000006  pix_loss: 0.4119 (0.6882)  pix_loss_CNN: 0.8075 (1.2829)  time: 4.8108  data: 0.0000  max mem: 56958
+[00:44:21.115692] Epoch: [0]  [ 3560/15468]  eta: 15:54:23  lr: 0.000006  pix_loss: 0.3914 (0.6866)  pix_loss_CNN: 0.8182 (1.2804)  time: 4.6357  data: 0.0000  max mem: 56958
+[00:45:57.459843] Epoch: [0]  [ 3580/15468]  eta: 15:52:47  lr: 0.000006  pix_loss: 0.4098 (0.6850)  pix_loss_CNN: 0.8182 (1.2779)  time: 4.8172  data: 0.0000  max mem: 56958
+[00:47:32.255965] Epoch: [0]  [ 3600/15468]  eta: 15:51:07  lr: 0.000006  pix_loss: 0.4235 (0.6836)  pix_loss_CNN: 0.8167 (1.2754)  time: 4.7398  data: 0.0000  max mem: 56958
+[00:49:00.766486] Epoch: [0]  [ 3620/15468]  eta: 15:49:05  lr: 0.000006  pix_loss: 0.4353 (0.6822)  pix_loss_CNN: 0.8140 (1.2729)  time: 4.4255  data: 0.0000  max mem: 56958
+[00:50:35.965458] Epoch: [0]  [ 3640/15468]  eta: 15:47:26  lr: 0.000006  pix_loss: 0.3871 (0.6807)  pix_loss_CNN: 0.8199 (1.2704)  time: 4.7599  data: 0.0000  max mem: 56958
+[00:52:12.844720] Epoch: [0]  [ 3660/15468]  eta: 15:45:53  lr: 0.000006  pix_loss: 0.4144 (0.6794)  pix_loss_CNN: 0.8424 (1.2681)  time: 4.8439  data: 0.0000  max mem: 56958
+[00:53:48.641427] Epoch: [0]  [ 3680/15468]  eta: 15:44:15  lr: 0.000006  pix_loss: 0.4163 (0.6780)  pix_loss_CNN: 0.8020 (1.2656)  time: 4.7898  data: 0.0000  max mem: 56958
+[00:55:24.378619] Epoch: [0]  [ 3700/15468]  eta: 15:42:38  lr: 0.000006  pix_loss: 0.3903 (0.6766)  pix_loss_CNN: 0.7995 (1.2631)  time: 4.7868  data: 0.0000  max mem: 56958
+[00:57:01.141098] Epoch: [0]  [ 3720/15468]  eta: 15:41:04  lr: 0.000006  pix_loss: 0.3991 (0.6752)  pix_loss_CNN: 0.7958 (1.2607)  time: 4.8381  data: 0.0000  max mem: 56958
+[00:58:36.173045] Epoch: [0]  [ 3740/15468]  eta: 15:39:24  lr: 0.000006  pix_loss: 0.4232 (0.6738)  pix_loss_CNN: 0.7943 (1.2582)  time: 4.7516  data: 0.0000  max mem: 56958
+[01:00:09.016106] Epoch: [0]  [ 3760/15468]  eta: 15:37:38  lr: 0.000006  pix_loss: 0.4185 (0.6725)  pix_loss_CNN: 0.7729 (1.2558)  time: 4.6421  data: 0.0000  max mem: 56958
+[01:01:40.257803] Epoch: [0]  [ 3780/15468]  eta: 15:35:47  lr: 0.000006  pix_loss: 0.4155 (0.6711)  pix_loss_CNN: 0.7876 (1.2533)  time: 4.5620  data: 0.0000  max mem: 56958
+[01:03:13.094229] Epoch: [0]  [ 3800/15468]  eta: 15:34:01  lr: 0.000006  pix_loss: 0.3611 (0.6695)  pix_loss_CNN: 0.7304 (1.2506)  time: 4.6418  data: 0.0000  max mem: 56958
+[01:04:48.474237] Epoch: [0]  [ 3820/15468]  eta: 15:32:23  lr: 0.000006  pix_loss: 0.4154 (0.6683)  pix_loss_CNN: 0.8043 (1.2482)  time: 4.7690  data: 0.0000  max mem: 56958
+[01:06:21.032671] Epoch: [0]  [ 3840/15468]  eta: 15:30:36  lr: 0.000006  pix_loss: 0.4030 (0.6670)  pix_loss_CNN: 0.7634 (1.2457)  time: 4.6279  data: 0.0000  max mem: 56958
+[01:07:56.195764] Epoch: [0]  [ 3860/15468]  eta: 15:28:57  lr: 0.000006  pix_loss: 0.4122 (0.6657)  pix_loss_CNN: 0.7790 (1.2433)  time: 4.7581  data: 0.0000  max mem: 56958
+[01:09:30.388204] Epoch: [0]  [ 3880/15468]  eta: 15:27:16  lr: 0.000006  pix_loss: 0.4260 (0.6645)  pix_loss_CNN: 0.7643 (1.2409)  time: 4.7096  data: 0.0000  max mem: 56958
+[01:11:05.303041] Epoch: [0]  [ 3900/15468]  eta: 15:25:37  lr: 0.000006  pix_loss: 0.3812 (0.6631)  pix_loss_CNN: 0.7515 (1.2384)  time: 4.7457  data: 0.0000  max mem: 56958
+[01:12:37.684994] Epoch: [0]  [ 3920/15468]  eta: 15:23:50  lr: 0.000006  pix_loss: 0.3897 (0.6617)  pix_loss_CNN: 0.7269 (1.2359)  time: 4.6191  data: 0.0000  max mem: 56958
+[01:14:12.718220] Epoch: [0]  [ 3940/15468]  eta: 15:22:11  lr: 0.000006  pix_loss: 0.4073 (0.6604)  pix_loss_CNN: 0.7349 (1.2333)  time: 4.7516  data: 0.0000  max mem: 56958
+[01:15:46.047683] Epoch: [0]  [ 3960/15468]  eta: 15:20:27  lr: 0.000006  pix_loss: 0.3977 (0.6591)  pix_loss_CNN: 0.7506 (1.2309)  time: 4.6664  data: 0.0000  max mem: 56958
+[01:17:19.327100] Epoch: [0]  [ 3980/15468]  eta: 15:18:44  lr: 0.000006  pix_loss: 0.3780 (0.6577)  pix_loss_CNN: 0.7138 (1.2283)  time: 4.6639  data: 0.0000  max mem: 56958
+[01:18:54.594625] Epoch: [0]  [ 4000/15468]  eta: 15:17:06  lr: 0.000006  pix_loss: 0.4092 (0.6564)  pix_loss_CNN: 0.7233 (1.2259)  time: 4.7633  data: 0.0000  max mem: 56958
+[01:20:31.553331] Epoch: [0]  [ 4020/15468]  eta: 15:15:32  lr: 0.000006  pix_loss: 0.4031 (0.6552)  pix_loss_CNN: 0.7372 (1.2235)  time: 4.8479  data: 0.0000  max mem: 56958
+[01:22:07.359431] Epoch: [0]  [ 4040/15468]  eta: 15:13:56  lr: 0.000007  pix_loss: 0.4113 (0.6540)  pix_loss_CNN: 0.7287 (1.2210)  time: 4.7903  data: 0.0000  max mem: 56958
+[01:23:41.907865] Epoch: [0]  [ 4060/15468]  eta: 15:12:16  lr: 0.000007  pix_loss: 0.3658 (0.6526)  pix_loss_CNN: 0.6909 (1.2184)  time: 4.7274  data: 0.0000  max mem: 56958
+[01:25:21.254098] Epoch: [0]  [ 4080/15468]  eta: 15:10:50  lr: 0.000007  pix_loss: 0.3714 (0.6513)  pix_loss_CNN: 0.7016 (1.2159)  time: 4.9673  data: 0.0000  max mem: 56958
+[01:26:55.664973] Epoch: [0]  [ 4100/15468]  eta: 15:09:09  lr: 0.000007  pix_loss: 0.3918 (0.6501)  pix_loss_CNN: 0.6985 (1.2135)  time: 4.7205  data: 0.0000  max mem: 56958
+[01:28:28.831971] Epoch: [0]  [ 4120/15468]  eta: 15:07:26  lr: 0.000007  pix_loss: 0.3721 (0.6488)  pix_loss_CNN: 0.6756 (1.2109)  time: 4.6583  data: 0.0000  max mem: 56958
+[01:30:04.417363] Epoch: [0]  [ 4140/15468]  eta: 15:05:49  lr: 0.000007  pix_loss: 0.3852 (0.6475)  pix_loss_CNN: 0.6886 (1.2084)  time: 4.7792  data: 0.0000  max mem: 56958
+[01:31:38.217527] Epoch: [0]  [ 4160/15468]  eta: 15:04:07  lr: 0.000007  pix_loss: 0.3967 (0.6463)  pix_loss_CNN: 0.6865 (1.2059)  time: 4.6900  data: 0.0000  max mem: 56958
+[01:33:11.746043] Epoch: [0]  [ 4180/15468]  eta: 15:02:24  lr: 0.000007  pix_loss: 0.4178 (0.6452)  pix_loss_CNN: 0.7018 (1.2036)  time: 4.6764  data: 0.0000  max mem: 56958
+[01:34:48.726621] Epoch: [0]  [ 4200/15468]  eta: 15:00:51  lr: 0.000007  pix_loss: 0.4003 (0.6440)  pix_loss_CNN: 0.7191 (1.2013)  time: 4.8490  data: 0.0000  max mem: 56958
+[01:36:26.896448] Epoch: [0]  [ 4220/15468]  eta: 14:59:21  lr: 0.000007  pix_loss: 0.4066 (0.6429)  pix_loss_CNN: 0.6865 (1.1989)  time: 4.9084  data: 0.0000  max mem: 56958
+[01:38:06.086237] Epoch: [0]  [ 4240/15468]  eta: 14:57:54  lr: 0.000007  pix_loss: 0.3702 (0.6416)  pix_loss_CNN: 0.6876 (1.1964)  time: 4.9594  data: 0.0000  max mem: 56958
+[01:39:41.850053] Epoch: [0]  [ 4260/15468]  eta: 14:56:17  lr: 0.000007  pix_loss: 0.3729 (0.6404)  pix_loss_CNN: 0.6414 (1.1939)  time: 4.7882  data: 0.0000  max mem: 56958
+[01:41:16.160400] Epoch: [0]  [ 4280/15468]  eta: 14:54:37  lr: 0.000007  pix_loss: 0.3813 (0.6391)  pix_loss_CNN: 0.6765 (1.1915)  time: 4.7155  data: 0.0000  max mem: 56958
+[01:42:48.985893] Epoch: [0]  [ 4300/15468]  eta: 14:52:53  lr: 0.000007  pix_loss: 0.3998 (0.6380)  pix_loss_CNN: 0.7365 (1.1893)  time: 4.6412  data: 0.0000  max mem: 56958
+[01:44:26.026704] Epoch: [0]  [ 4320/15468]  eta: 14:51:20  lr: 0.000007  pix_loss: 0.3756 (0.6368)  pix_loss_CNN: 0.6645 (1.1868)  time: 4.8520  data: 0.0000  max mem: 56958
+[01:46:01.485704] Epoch: [0]  [ 4340/15468]  eta: 14:49:43  lr: 0.000007  pix_loss: 0.3769 (0.6357)  pix_loss_CNN: 0.6539 (1.1844)  time: 4.7729  data: 0.0000  max mem: 56958
+[01:47:37.934376] Epoch: [0]  [ 4360/15468]  eta: 14:48:08  lr: 0.000007  pix_loss: 0.4035 (0.6347)  pix_loss_CNN: 0.6780 (1.1821)  time: 4.8224  data: 0.0000  max mem: 56958
+[01:49:11.874880] Epoch: [0]  [ 4380/15468]  eta: 14:46:27  lr: 0.000007  pix_loss: 0.3732 (0.6335)  pix_loss_CNN: 0.6789 (1.1797)  time: 4.6970  data: 0.0000  max mem: 56958
+[01:50:47.637946] Epoch: [0]  [ 4400/15468]  eta: 14:44:51  lr: 0.000007  pix_loss: 0.4029 (0.6324)  pix_loss_CNN: 0.6636 (1.1774)  time: 4.7881  data: 0.0000  max mem: 56958
+[01:52:23.572618] Epoch: [0]  [ 4420/15468]  eta: 14:43:15  lr: 0.000007  pix_loss: 0.3647 (0.6312)  pix_loss_CNN: 0.6414 (1.1750)  time: 4.7967  data: 0.0000  max mem: 56958
+[01:53:56.634957] Epoch: [0]  [ 4440/15468]  eta: 14:41:32  lr: 0.000007  pix_loss: 0.3789 (0.6301)  pix_loss_CNN: 0.6513 (1.1727)  time: 4.6531  data: 0.0000  max mem: 56958
+[01:55:28.867604] Epoch: [0]  [ 4460/15468]  eta: 14:39:46  lr: 0.000007  pix_loss: 0.3783 (0.6290)  pix_loss_CNN: 0.6562 (1.1704)  time: 4.6116  data: 0.0000  max mem: 56958
+[01:57:03.620070] Epoch: [0]  [ 4480/15468]  eta: 14:38:08  lr: 0.000007  pix_loss: 0.3838 (0.6279)  pix_loss_CNN: 0.6676 (1.1681)  time: 4.7376  data: 0.0000  max mem: 56958
+[01:58:41.128876] Epoch: [0]  [ 4500/15468]  eta: 14:36:36  lr: 0.000007  pix_loss: 0.3901 (0.6268)  pix_loss_CNN: 0.6515 (1.1658)  time: 4.8754  data: 0.0000  max mem: 56958
+[02:00:13.607952] Epoch: [0]  [ 4520/15468]  eta: 14:34:52  lr: 0.000007  pix_loss: 0.3669 (0.6257)  pix_loss_CNN: 0.6164 (1.1634)  time: 4.6239  data: 0.0000  max mem: 56958
+[02:01:50.020644] Epoch: [0]  [ 4540/15468]  eta: 14:33:17  lr: 0.000007  pix_loss: 0.3725 (0.6246)  pix_loss_CNN: 0.6407 (1.1611)  time: 4.8206  data: 0.0000  max mem: 56958
+[02:03:32.286489] Epoch: [0]  [ 4560/15468]  eta: 14:31:56  lr: 0.000007  pix_loss: 0.3615 (0.6235)  pix_loss_CNN: 0.6207 (1.1587)  time: 5.1132  data: 0.0000  max mem: 56958
+[02:05:05.516648] Epoch: [0]  [ 4580/15468]  eta: 14:30:14  lr: 0.000007  pix_loss: 0.3823 (0.6224)  pix_loss_CNN: 0.6077 (1.1564)  time: 4.6615  data: 0.0000  max mem: 56958
+[02:06:39.186197] Epoch: [0]  [ 4600/15468]  eta: 14:28:33  lr: 0.000007  pix_loss: 0.3688 (0.6213)  pix_loss_CNN: 0.6264 (1.1541)  time: 4.6834  data: 0.0000  max mem: 56958
+[02:08:14.698533] Epoch: [0]  [ 4620/15468]  eta: 14:26:56  lr: 0.000007  pix_loss: 0.3569 (0.6202)  pix_loss_CNN: 0.6181 (1.1518)  time: 4.7756  data: 0.0000  max mem: 56958
+[02:09:48.057322] Epoch: [0]  [ 4640/15468]  eta: 14:25:14  lr: 0.000007  pix_loss: 0.3737 (0.6192)  pix_loss_CNN: 0.6183 (1.1496)  time: 4.6679  data: 0.0000  max mem: 56958
+[02:11:23.274479] Epoch: [0]  [ 4660/15468]  eta: 14:23:37  lr: 0.000008  pix_loss: 0.3765 (0.6181)  pix_loss_CNN: 0.6162 (1.1473)  time: 4.7608  data: 0.0000  max mem: 56958
+[02:12:57.387921] Epoch: [0]  [ 4680/15468]  eta: 14:21:57  lr: 0.000008  pix_loss: 0.3739 (0.6170)  pix_loss_CNN: 0.5990 (1.1450)  time: 4.7056  data: 0.0000  max mem: 56958
+[02:14:34.044690] Epoch: [0]  [ 4700/15468]  eta: 14:20:23  lr: 0.000008  pix_loss: 0.3603 (0.6160)  pix_loss_CNN: 0.6148 (1.1428)  time: 4.8328  data: 0.0000  max mem: 56958
+[02:16:08.483852] Epoch: [0]  [ 4720/15468]  eta: 14:18:43  lr: 0.000008  pix_loss: 0.4210 (0.6151)  pix_loss_CNN: 0.6593 (1.1407)  time: 4.7219  data: 0.0000  max mem: 56958
+[02:17:41.267342] Epoch: [0]  [ 4740/15468]  eta: 14:17:00  lr: 0.000008  pix_loss: 0.3728 (0.6141)  pix_loss_CNN: 0.6137 (1.1385)  time: 4.6391  data: 0.0000  max mem: 56958
+[02:19:16.865557] Epoch: [0]  [ 4760/15468]  eta: 14:15:24  lr: 0.000008  pix_loss: 0.3757 (0.6131)  pix_loss_CNN: 0.5951 (1.1362)  time: 4.7799  data: 0.0000  max mem: 56958
+[02:20:53.464837] Epoch: [0]  [ 4780/15468]  eta: 14:13:50  lr: 0.000008  pix_loss: 0.3588 (0.6121)  pix_loss_CNN: 0.5984 (1.1340)  time: 4.8299  data: 0.0000  max mem: 56958
+[02:22:27.768596] Epoch: [0]  [ 4800/15468]  eta: 14:12:10  lr: 0.000008  pix_loss: 0.3804 (0.6111)  pix_loss_CNN: 0.5988 (1.1318)  time: 4.7151  data: 0.0000  max mem: 56958
+[02:24:00.489090] Epoch: [0]  [ 4820/15468]  eta: 14:10:28  lr: 0.000008  pix_loss: 0.3701 (0.6101)  pix_loss_CNN: 0.6139 (1.1297)  time: 4.6360  data: 0.0000  max mem: 56958
+[02:25:33.916960] Epoch: [0]  [ 4840/15468]  eta: 14:08:47  lr: 0.000008  pix_loss: 0.3660 (0.6091)  pix_loss_CNN: 0.6286 (1.1276)  time: 4.6714  data: 0.0000  max mem: 56958
+[02:27:13.420475] Epoch: [0]  [ 4860/15468]  eta: 14:07:19  lr: 0.000008  pix_loss: 0.3609 (0.6082)  pix_loss_CNN: 0.5735 (1.1254)  time: 4.9751  data: 0.0000  max mem: 56958
+[02:28:46.865876] Epoch: [0]  [ 4880/15468]  eta: 14:05:38  lr: 0.000008  pix_loss: 0.3666 (0.6072)  pix_loss_CNN: 0.6144 (1.1233)  time: 4.6722  data: 0.0000  max mem: 56958
+[02:30:23.365707] Epoch: [0]  [ 4900/15468]  eta: 14:04:03  lr: 0.000008  pix_loss: 0.3566 (0.6063)  pix_loss_CNN: 0.5965 (1.1212)  time: 4.8249  data: 0.0000  max mem: 56958
+[02:31:57.164421] Epoch: [0]  [ 4920/15468]  eta: 14:02:23  lr: 0.000008  pix_loss: 0.3517 (0.6053)  pix_loss_CNN: 0.5885 (1.1190)  time: 4.6899  data: 0.0000  max mem: 56958
+[02:33:30.852240] Epoch: [0]  [ 4940/15468]  eta: 14:00:43  lr: 0.000008  pix_loss: 0.3632 (0.6043)  pix_loss_CNN: 0.5856 (1.1169)  time: 4.6844  data: 0.0000  max mem: 56958
+[02:35:01.803420] Epoch: [0]  [ 4960/15468]  eta: 13:58:56  lr: 0.000008  pix_loss: 0.3430 (0.6033)  pix_loss_CNN: 0.5654 (1.1147)  time: 4.5475  data: 0.0000  max mem: 56958
+[02:36:38.715942] Epoch: [0]  [ 4980/15468]  eta: 13:57:23  lr: 0.000008  pix_loss: 0.3471 (0.6023)  pix_loss_CNN: 0.5870 (1.1126)  time: 4.8456  data: 0.0000  max mem: 56958
+[02:38:14.190797] Epoch: [0]  [ 5000/15468]  eta: 13:55:46  lr: 0.000008  pix_loss: 0.3744 (0.6014)  pix_loss_CNN: 0.6034 (1.1105)  time: 4.7737  data: 0.0000  max mem: 56958
+[02:39:47.040856] Epoch: [0]  [ 5020/15468]  eta: 13:54:04  lr: 0.000008  pix_loss: 0.3499 (0.6004)  pix_loss_CNN: 0.5747 (1.1084)  time: 4.6425  data: 0.0000  max mem: 56958
+[02:41:20.744057] Epoch: [0]  [ 5040/15468]  eta: 13:52:24  lr: 0.000008  pix_loss: 0.3484 (0.5994)  pix_loss_CNN: 0.5601 (1.1063)  time: 4.6851  data: 0.0000  max mem: 56958
+[02:42:55.866951] Epoch: [0]  [ 5060/15468]  eta: 13:50:47  lr: 0.000008  pix_loss: 0.3744 (0.5986)  pix_loss_CNN: 0.5947 (1.1043)  time: 4.7561  data: 0.0000  max mem: 56958
+[02:44:32.917581] Epoch: [0]  [ 5080/15468]  eta: 13:49:14  lr: 0.000008  pix_loss: 0.3417 (0.5976)  pix_loss_CNN: 0.5726 (1.1022)  time: 4.8525  data: 0.0000  max mem: 56958
+[02:46:08.311737] Epoch: [0]  [ 5100/15468]  eta: 13:47:37  lr: 0.000008  pix_loss: 0.3315 (0.5965)  pix_loss_CNN: 0.5484 (1.1001)  time: 4.7697  data: 0.0000  max mem: 56958
+[02:47:43.378211] Epoch: [0]  [ 5120/15468]  eta: 13:46:00  lr: 0.000008  pix_loss: 0.3562 (0.5957)  pix_loss_CNN: 0.5645 (1.0981)  time: 4.7533  data: 0.0000  max mem: 56958
+[02:49:15.937656] Epoch: [0]  [ 5140/15468]  eta: 13:44:18  lr: 0.000008  pix_loss: 0.3507 (0.5947)  pix_loss_CNN: 0.5629 (1.0961)  time: 4.6279  data: 0.0000  max mem: 56958
+[02:50:55.713570] Epoch: [0]  [ 5160/15468]  eta: 13:42:50  lr: 0.000008  pix_loss: 0.3736 (0.5939)  pix_loss_CNN: 0.5974 (1.0942)  time: 4.9888  data: 0.0000  max mem: 56958
+[02:52:32.739032] Epoch: [0]  [ 5180/15468]  eta: 13:41:17  lr: 0.000008  pix_loss: 0.3644 (0.5930)  pix_loss_CNN: 0.5522 (1.0922)  time: 4.8512  data: 0.0000  max mem: 56958
+[02:54:09.784949] Epoch: [0]  [ 5200/15468]  eta: 13:39:43  lr: 0.000008  pix_loss: 0.3427 (0.5921)  pix_loss_CNN: 0.5633 (1.0902)  time: 4.8523  data: 0.0000  max mem: 56958
+[02:55:44.066029] Epoch: [0]  [ 5220/15468]  eta: 13:38:05  lr: 0.000008  pix_loss: 0.3305 (0.5911)  pix_loss_CNN: 0.5649 (1.0881)  time: 4.7140  data: 0.0000  max mem: 56958
+[02:57:19.352541] Epoch: [0]  [ 5240/15468]  eta: 13:36:28  lr: 0.000008  pix_loss: 0.3485 (0.5902)  pix_loss_CNN: 0.5663 (1.0862)  time: 4.7643  data: 0.0000  max mem: 56958
+[02:58:51.634338] Epoch: [0]  [ 5260/15468]  eta: 13:34:45  lr: 0.000009  pix_loss: 0.3821 (0.5894)  pix_loss_CNN: 0.5968 (1.0843)  time: 4.6140  data: 0.0000  max mem: 56958
+[03:00:23.308930] Epoch: [0]  [ 5280/15468]  eta: 13:33:01  lr: 0.000009  pix_loss: 0.3498 (0.5885)  pix_loss_CNN: 0.5610 (1.0823)  time: 4.5837  data: 0.0000  max mem: 56958
+[03:01:59.297997] Epoch: [0]  [ 5300/15468]  eta: 13:31:26  lr: 0.000009  pix_loss: 0.3467 (0.5876)  pix_loss_CNN: 0.5675 (1.0804)  time: 4.7994  data: 0.0000  max mem: 56958
+[03:03:34.746514] Epoch: [0]  [ 5320/15468]  eta: 13:29:50  lr: 0.000009  pix_loss: 0.3558 (0.5867)  pix_loss_CNN: 0.5610 (1.0785)  time: 4.7724  data: 0.0000  max mem: 56958
+[03:05:10.345736] Epoch: [0]  [ 5340/15468]  eta: 13:28:14  lr: 0.000009  pix_loss: 0.3411 (0.5858)  pix_loss_CNN: 0.5655 (1.0766)  time: 4.7799  data: 0.0000  max mem: 56958
+[03:06:48.102833] Epoch: [0]  [ 5360/15468]  eta: 13:26:42  lr: 0.000009  pix_loss: 0.3523 (0.5850)  pix_loss_CNN: 0.5677 (1.0747)  time: 4.8878  data: 0.0000  max mem: 56958
+[03:08:23.460519] Epoch: [0]  [ 5380/15468]  eta: 13:25:05  lr: 0.000009  pix_loss: 0.3565 (0.5841)  pix_loss_CNN: 0.5729 (1.0729)  time: 4.7678  data: 0.0000  max mem: 56958
+[03:09:56.998310] Epoch: [0]  [ 5400/15468]  eta: 13:23:25  lr: 0.000009  pix_loss: 0.3430 (0.5833)  pix_loss_CNN: 0.5492 (1.0709)  time: 4.6768  data: 0.0000  max mem: 56958
+[03:11:28.100568] Epoch: [0]  [ 5420/15468]  eta: 13:21:41  lr: 0.000009  pix_loss: 0.3287 (0.5824)  pix_loss_CNN: 0.5468 (1.0691)  time: 4.5551  data: 0.0000  max mem: 56958
+[03:13:06.122663] Epoch: [0]  [ 5440/15468]  eta: 13:20:09  lr: 0.000009  pix_loss: 0.3607 (0.5816)  pix_loss_CNN: 0.5596 (1.0672)  time: 4.9011  data: 0.0000  max mem: 56958
+[03:14:39.881334] Epoch: [0]  [ 5460/15468]  eta: 13:18:30  lr: 0.000009  pix_loss: 0.3566 (0.5808)  pix_loss_CNN: 0.5731 (1.0654)  time: 4.6879  data: 0.0000  max mem: 56958
+[03:16:17.251119] Epoch: [0]  [ 5480/15468]  eta: 13:16:57  lr: 0.000009  pix_loss: 0.3889 (0.5800)  pix_loss_CNN: 0.5892 (1.0637)  time: 4.8684  data: 0.0000  max mem: 56958
+[03:17:53.219902] Epoch: [0]  [ 5500/15468]  eta: 13:15:22  lr: 0.000009  pix_loss: 0.3525 (0.5792)  pix_loss_CNN: 0.5805 (1.0619)  time: 4.7984  data: 0.0000  max mem: 56958
+[03:19:25.239148] Epoch: [0]  [ 5520/15468]  eta: 13:13:39  lr: 0.000009  pix_loss: 0.3438 (0.5784)  pix_loss_CNN: 0.5539 (1.0601)  time: 4.6009  data: 0.0000  max mem: 56958
+[03:20:59.888047] Epoch: [0]  [ 5540/15468]  eta: 13:12:02  lr: 0.000009  pix_loss: 0.3699 (0.5776)  pix_loss_CNN: 0.5819 (1.0583)  time: 4.7324  data: 0.0000  max mem: 56958
+[03:22:32.961370] Epoch: [0]  [ 5560/15468]  eta: 13:10:21  lr: 0.000009  pix_loss: 0.3463 (0.5768)  pix_loss_CNN: 0.5483 (1.0565)  time: 4.6536  data: 0.0000  max mem: 56958
+[03:25:01.026980] Epoch: [0]  [ 5580/15468]  eta: 13:10:18  lr: 0.000009  pix_loss: 0.3390 (0.5759)  pix_loss_CNN: 0.5539 (1.0547)  time: 7.4032  data: 0.0000  max mem: 56958
+[03:26:30.926397] Epoch: [0]  [ 5600/15468]  eta: 13:08:32  lr: 0.000009  pix_loss: 0.3496 (0.5752)  pix_loss_CNN: 0.5569 (1.0529)  time: 4.4949  data: 0.0000  max mem: 56958
+[03:28:06.233304] Epoch: [0]  [ 5620/15468]  eta: 13:06:55  lr: 0.000009  pix_loss: 0.3528 (0.5744)  pix_loss_CNN: 0.5713 (1.0513)  time: 4.7653  data: 0.0000  max mem: 56958
+[03:29:43.224934] Epoch: [0]  [ 5640/15468]  eta: 13:05:21  lr: 0.000009  pix_loss: 0.3591 (0.5736)  pix_loss_CNN: 0.5733 (1.0496)  time: 4.8495  data: 0.0000  max mem: 56958
+[03:31:19.293836] Epoch: [0]  [ 5660/15468]  eta: 13:03:45  lr: 0.000009  pix_loss: 0.3447 (0.5728)  pix_loss_CNN: 0.5517 (1.0478)  time: 4.8034  data: 0.0000  max mem: 56958
+[03:32:53.946453] Epoch: [0]  [ 5680/15468]  eta: 13:02:07  lr: 0.000009  pix_loss: 0.3446 (0.5720)  pix_loss_CNN: 0.5576 (1.0460)  time: 4.7326  data: 0.0000  max mem: 56958
+[03:34:28.680768] Epoch: [0]  [ 5700/15468]  eta: 13:00:29  lr: 0.000009  pix_loss: 0.3486 (0.5713)  pix_loss_CNN: 0.5495 (1.0444)  time: 4.7367  data: 0.0000  max mem: 56958
+[03:36:04.798352] Epoch: [0]  [ 5720/15468]  eta: 12:58:54  lr: 0.000009  pix_loss: 0.3388 (0.5705)  pix_loss_CNN: 0.5403 (1.0426)  time: 4.8058  data: 0.0000  max mem: 56958
+[03:37:38.149074] Epoch: [0]  [ 5740/15468]  eta: 12:57:14  lr: 0.000009  pix_loss: 0.3175 (0.5696)  pix_loss_CNN: 0.5227 (1.0408)  time: 4.6675  data: 0.0000  max mem: 56958
+[03:39:14.462178] Epoch: [0]  [ 5760/15468]  eta: 12:55:38  lr: 0.000009  pix_loss: 0.3337 (0.5688)  pix_loss_CNN: 0.5488 (1.0391)  time: 4.8156  data: 0.0000  max mem: 56958
+[03:40:47.989859] Epoch: [0]  [ 5780/15468]  eta: 12:53:59  lr: 0.000009  pix_loss: 0.3478 (0.5681)  pix_loss_CNN: 0.5548 (1.0374)  time: 4.6763  data: 0.0000  max mem: 56958
+[03:42:23.142976] Epoch: [0]  [ 5800/15468]  eta: 12:52:22  lr: 0.000009  pix_loss: 0.3419 (0.5673)  pix_loss_CNN: 0.5526 (1.0357)  time: 4.7576  data: 0.0000  max mem: 56958
+[03:43:58.751007] Epoch: [0]  [ 5820/15468]  eta: 12:50:45  lr: 0.000009  pix_loss: 0.3376 (0.5666)  pix_loss_CNN: 0.5408 (1.0340)  time: 4.7804  data: 0.0000  max mem: 56958
+[03:45:34.589818] Epoch: [0]  [ 5840/15468]  eta: 12:49:09  lr: 0.000009  pix_loss: 0.3432 (0.5658)  pix_loss_CNN: 0.5441 (1.0324)  time: 4.7919  data: 0.0000  max mem: 56958
+[03:47:08.906068] Epoch: [0]  [ 5860/15468]  eta: 12:47:31  lr: 0.000009  pix_loss: 0.3278 (0.5650)  pix_loss_CNN: 0.5601 (1.0307)  time: 4.7158  data: 0.0000  max mem: 56958
+[03:48:43.092261] Epoch: [0]  [ 5880/15468]  eta: 12:45:52  lr: 0.000010  pix_loss: 0.3491 (0.5643)  pix_loss_CNN: 0.5402 (1.0291)  time: 4.7093  data: 0.0000  max mem: 56958
+[03:50:18.841068] Epoch: [0]  [ 5900/15468]  eta: 12:44:16  lr: 0.000010  pix_loss: 0.3234 (0.5635)  pix_loss_CNN: 0.5380 (1.0274)  time: 4.7874  data: 0.0000  max mem: 56958
+[03:51:53.299954] Epoch: [0]  [ 5920/15468]  eta: 12:42:38  lr: 0.000010  pix_loss: 0.3166 (0.5627)  pix_loss_CNN: 0.5081 (1.0257)  time: 4.7229  data: 0.0000  max mem: 56958
+[03:53:27.864382] Epoch: [0]  [ 5940/15468]  eta: 12:41:00  lr: 0.000010  pix_loss: 0.3349 (0.5620)  pix_loss_CNN: 0.5536 (1.0242)  time: 4.7282  data: 0.0000  max mem: 56958
+[03:55:03.401971] Epoch: [0]  [ 5960/15468]  eta: 12:39:24  lr: 0.000010  pix_loss: 0.3565 (0.5613)  pix_loss_CNN: 0.5487 (1.0226)  time: 4.7768  data: 0.0000  max mem: 56958
+[03:56:37.975443] Epoch: [0]  [ 5980/15468]  eta: 12:37:46  lr: 0.000010  pix_loss: 0.3373 (0.5606)  pix_loss_CNN: 0.5448 (1.0210)  time: 4.7286  data: 0.0000  max mem: 56958
+[03:58:15.628003] Epoch: [0]  [ 6000/15468]  eta: 12:36:13  lr: 0.000010  pix_loss: 0.3474 (0.5598)  pix_loss_CNN: 0.5604 (1.0193)  time: 4.8826  data: 0.0000  max mem: 56958
+[03:59:50.099638] Epoch: [0]  [ 6020/15468]  eta: 12:34:35  lr: 0.000010  pix_loss: 0.3114 (0.5590)  pix_loss_CNN: 0.5170 (1.0177)  time: 4.7235  data: 0.0000  max mem: 56958
+[04:01:23.920604] Epoch: [0]  [ 6040/15468]  eta: 12:32:56  lr: 0.000010  pix_loss: 0.3190 (0.5582)  pix_loss_CNN: 0.5289 (1.0161)  time: 4.6910  data: 0.0000  max mem: 56958
+[04:02:58.451002] Epoch: [0]  [ 6060/15468]  eta: 12:31:18  lr: 0.000010  pix_loss: 0.3272 (0.5575)  pix_loss_CNN: 0.5290 (1.0144)  time: 4.7265  data: 0.0000  max mem: 56958
+[04:04:34.211203] Epoch: [0]  [ 6080/15468]  eta: 12:29:42  lr: 0.000010  pix_loss: 0.3338 (0.5567)  pix_loss_CNN: 0.5431 (1.0129)  time: 4.7880  data: 0.0000  max mem: 56958
+[04:06:10.711896] Epoch: [0]  [ 6100/15468]  eta: 12:28:07  lr: 0.000010  pix_loss: 0.3435 (0.5561)  pix_loss_CNN: 0.5631 (1.0114)  time: 4.8250  data: 0.0000  max mem: 56958
+[04:07:45.394480] Epoch: [0]  [ 6120/15468]  eta: 12:26:30  lr: 0.000010  pix_loss: 0.3129 (0.5553)  pix_loss_CNN: 0.5183 (1.0098)  time: 4.7341  data: 0.0000  max mem: 56958
+[04:09:26.348065] Epoch: [0]  [ 6140/15468]  eta: 12:25:02  lr: 0.000010  pix_loss: 0.3191 (0.5545)  pix_loss_CNN: 0.5309 (1.0082)  time: 5.0476  data: 0.0000  max mem: 56958
+[04:11:03.817835] Epoch: [0]  [ 6160/15468]  eta: 12:23:28  lr: 0.000010  pix_loss: 0.3197 (0.5538)  pix_loss_CNN: 0.5088 (1.0066)  time: 4.8734  data: 0.0000  max mem: 56958
+[04:12:40.457477] Epoch: [0]  [ 6180/15468]  eta: 12:21:54  lr: 0.000010  pix_loss: 0.3380 (0.5530)  pix_loss_CNN: 0.5392 (1.0051)  time: 4.8319  data: 0.0000  max mem: 56958
+[04:14:13.855123] Epoch: [0]  [ 6200/15468]  eta: 12:20:14  lr: 0.000010  pix_loss: 0.3087 (0.5523)  pix_loss_CNN: 0.4949 (1.0035)  time: 4.6698  data: 0.0000  max mem: 56958
+[04:15:51.992097] Epoch: [0]  [ 6220/15468]  eta: 12:18:42  lr: 0.000010  pix_loss: 0.3145 (0.5515)  pix_loss_CNN: 0.5167 (1.0020)  time: 4.9068  data: 0.0000  max mem: 56958
+[04:17:26.563993] Epoch: [0]  [ 6240/15468]  eta: 12:17:04  lr: 0.000010  pix_loss: 0.3071 (0.5508)  pix_loss_CNN: 0.5204 (1.0005)  time: 4.7286  data: 0.0000  max mem: 56958
+[04:19:04.133317] Epoch: [0]  [ 6260/15468]  eta: 12:15:31  lr: 0.000010  pix_loss: 0.3245 (0.5502)  pix_loss_CNN: 0.5382 (0.9990)  time: 4.8784  data: 0.0000  max mem: 56958
+[04:20:39.230054] Epoch: [0]  [ 6280/15468]  eta: 12:13:54  lr: 0.000010  pix_loss: 0.3366 (0.5495)  pix_loss_CNN: 0.5515 (0.9976)  time: 4.7548  data: 0.0000  max mem: 56958
+[04:22:15.669184] Epoch: [0]  [ 6300/15468]  eta: 12:12:19  lr: 0.000010  pix_loss: 0.3107 (0.5488)  pix_loss_CNN: 0.5262 (0.9961)  time: 4.8219  data: 0.0000  max mem: 56958
+[04:24:17.501915] Epoch: [0]  [ 6320/15468]  eta: 12:11:21  lr: 0.000010  pix_loss: 0.3188 (0.5480)  pix_loss_CNN: 0.4990 (0.9946)  time: 6.0916  data: 0.0000  max mem: 56958
+[04:25:50.134785] Epoch: [0]  [ 6340/15468]  eta: 12:09:40  lr: 0.000010  pix_loss: 0.2994 (0.5473)  pix_loss_CNN: 0.4963 (0.9930)  time: 4.6316  data: 0.0000  max mem: 56958
+[04:27:25.592079] Epoch: [0]  [ 6360/15468]  eta: 12:08:03  lr: 0.000010  pix_loss: 0.3387 (0.5467)  pix_loss_CNN: 0.5375 (0.9916)  time: 4.7728  data: 0.0000  max mem: 56958
+[04:28:55.416684] Epoch: [0]  [ 6380/15468]  eta: 12:06:19  lr: 0.000010  pix_loss: 0.2911 (0.5459)  pix_loss_CNN: 0.4943 (0.9901)  time: 4.4912  data: 0.0000  max mem: 56958
+[04:30:30.490451] Epoch: [0]  [ 6400/15468]  eta: 12:04:42  lr: 0.000010  pix_loss: 0.3235 (0.5452)  pix_loss_CNN: 0.5115 (0.9886)  time: 4.7536  data: 0.0000  max mem: 56958
+[04:32:03.799798] Epoch: [0]  [ 6420/15468]  eta: 12:03:02  lr: 0.000010  pix_loss: 0.3083 (0.5445)  pix_loss_CNN: 0.5279 (0.9872)  time: 4.6654  data: 0.0000  max mem: 56958
+[04:33:38.534290] Epoch: [0]  [ 6440/15468]  eta: 12:01:24  lr: 0.000010  pix_loss: 0.3135 (0.5438)  pix_loss_CNN: 0.5119 (0.9857)  time: 4.7367  data: 0.0000  max mem: 56958
+[04:35:14.883252] Epoch: [0]  [ 6460/15468]  eta: 11:59:49  lr: 0.000010  pix_loss: 0.3231 (0.5431)  pix_loss_CNN: 0.5253 (0.9843)  time: 4.8174  data: 0.0000  max mem: 56958
+[04:36:47.922509] Epoch: [0]  [ 6480/15468]  eta: 11:58:09  lr: 0.000010  pix_loss: 0.3171 (0.5425)  pix_loss_CNN: 0.5211 (0.9829)  time: 4.6519  data: 0.0000  max mem: 56958
+[04:38:25.000417] Epoch: [0]  [ 6500/15468]  eta: 11:56:35  lr: 0.000011  pix_loss: 0.3163 (0.5418)  pix_loss_CNN: 0.5353 (0.9815)  time: 4.8539  data: 0.0000  max mem: 56958
+[04:40:00.747539] Epoch: [0]  [ 6520/15468]  eta: 11:54:59  lr: 0.000011  pix_loss: 0.3130 (0.5411)  pix_loss_CNN: 0.5113 (0.9801)  time: 4.7873  data: 0.0000  max mem: 56958
+[04:41:36.396366] Epoch: [0]  [ 6540/15468]  eta: 11:53:23  lr: 0.000011  pix_loss: 0.3107 (0.5404)  pix_loss_CNN: 0.5133 (0.9787)  time: 4.7824  data: 0.0000  max mem: 56958
+[04:43:08.963811] Epoch: [0]  [ 6560/15468]  eta: 11:51:42  lr: 0.000011  pix_loss: 0.2971 (0.5396)  pix_loss_CNN: 0.4948 (0.9772)  time: 4.6283  data: 0.0000  max mem: 56958
+[04:44:40.858219] Epoch: [0]  [ 6580/15468]  eta: 11:50:01  lr: 0.000011  pix_loss: 0.3084 (0.5390)  pix_loss_CNN: 0.5258 (0.9758)  time: 4.5947  data: 0.0000  max mem: 56958
+[04:46:14.944912] Epoch: [0]  [ 6600/15468]  eta: 11:48:23  lr: 0.000011  pix_loss: 0.3286 (0.5383)  pix_loss_CNN: 0.5242 (0.9745)  time: 4.7043  data: 0.0000  max mem: 56958
+[04:47:50.726518] Epoch: [0]  [ 6620/15468]  eta: 11:46:47  lr: 0.000011  pix_loss: 0.3077 (0.5377)  pix_loss_CNN: 0.5071 (0.9731)  time: 4.7890  data: 0.0000  max mem: 56958
+[04:49:23.573365] Epoch: [0]  [ 6640/15468]  eta: 11:45:07  lr: 0.000011  pix_loss: 0.3193 (0.5370)  pix_loss_CNN: 0.5296 (0.9717)  time: 4.6423  data: 0.0000  max mem: 56958
+[04:50:58.237833] Epoch: [0]  [ 6660/15468]  eta: 11:43:30  lr: 0.000011  pix_loss: 0.3138 (0.5363)  pix_loss_CNN: 0.5143 (0.9703)  time: 4.7332  data: 0.0000  max mem: 56958
+[04:52:30.210711] Epoch: [0]  [ 6680/15468]  eta: 11:41:49  lr: 0.000011  pix_loss: 0.2996 (0.5356)  pix_loss_CNN: 0.5185 (0.9689)  time: 4.5986  data: 0.0000  max mem: 56958
+[04:54:05.994291] Epoch: [0]  [ 6700/15468]  eta: 11:40:13  lr: 0.000011  pix_loss: 0.2983 (0.5349)  pix_loss_CNN: 0.4914 (0.9675)  time: 4.7891  data: 0.0000  max mem: 56958
+[04:55:43.354696] Epoch: [0]  [ 6720/15468]  eta: 11:38:39  lr: 0.000011  pix_loss: 0.3002 (0.5343)  pix_loss_CNN: 0.5084 (0.9662)  time: 4.8680  data: 0.0000  max mem: 56958
+[04:57:19.131704] Epoch: [0]  [ 6740/15468]  eta: 11:37:03  lr: 0.000011  pix_loss: 0.3226 (0.5337)  pix_loss_CNN: 0.5319 (0.9649)  time: 4.7888  data: 0.0000  max mem: 56958
+[04:58:57.138646] Epoch: [0]  [ 6760/15468]  eta: 11:35:30  lr: 0.000011  pix_loss: 0.3056 (0.5330)  pix_loss_CNN: 0.5003 (0.9636)  time: 4.9003  data: 0.0000  max mem: 56958
+[05:00:33.059875] Epoch: [0]  [ 6780/15468]  eta: 11:33:54  lr: 0.000011  pix_loss: 0.3007 (0.5324)  pix_loss_CNN: 0.4972 (0.9623)  time: 4.7960  data: 0.0000  max mem: 56958
+[05:02:08.971873] Epoch: [0]  [ 6800/15468]  eta: 11:32:19  lr: 0.000011  pix_loss: 0.3063 (0.5317)  pix_loss_CNN: 0.4881 (0.9609)  time: 4.7955  data: 0.0000  max mem: 56958
+[05:03:43.908065] Epoch: [0]  [ 6820/15468]  eta: 11:30:42  lr: 0.000011  pix_loss: 0.2931 (0.5310)  pix_loss_CNN: 0.5068 (0.9596)  time: 4.7468  data: 0.0000  max mem: 56958
+[05:05:19.489876] Epoch: [0]  [ 6840/15468]  eta: 11:29:05  lr: 0.000011  pix_loss: 0.2930 (0.5304)  pix_loss_CNN: 0.4988 (0.9583)  time: 4.7791  data: 0.0000  max mem: 56958
+[05:06:53.584294] Epoch: [0]  [ 6860/15468]  eta: 11:27:27  lr: 0.000011  pix_loss: 0.3162 (0.5298)  pix_loss_CNN: 0.5066 (0.9570)  time: 4.7047  data: 0.0000  max mem: 56958
+[05:08:27.258656] Epoch: [0]  [ 6880/15468]  eta: 11:25:49  lr: 0.000011  pix_loss: 0.2853 (0.5291)  pix_loss_CNN: 0.4731 (0.9556)  time: 4.6837  data: 0.0000  max mem: 56958
+[05:10:03.208888] Epoch: [0]  [ 6900/15468]  eta: 11:24:13  lr: 0.000011  pix_loss: 0.2869 (0.5284)  pix_loss_CNN: 0.4880 (0.9543)  time: 4.7975  data: 0.0000  max mem: 56958
+[05:11:38.913656] Epoch: [0]  [ 6920/15468]  eta: 11:22:37  lr: 0.000011  pix_loss: 0.2932 (0.5277)  pix_loss_CNN: 0.4888 (0.9529)  time: 4.7852  data: 0.0000  max mem: 56958
+[05:13:13.880361] Epoch: [0]  [ 6940/15468]  eta: 11:21:00  lr: 0.000011  pix_loss: 0.2739 (0.5270)  pix_loss_CNN: 0.4710 (0.9516)  time: 4.7483  data: 0.0000  max mem: 56958
+[05:14:48.898552] Epoch: [0]  [ 6960/15468]  eta: 11:19:23  lr: 0.000011  pix_loss: 0.2948 (0.5264)  pix_loss_CNN: 0.4893 (0.9503)  time: 4.7509  data: 0.0000  max mem: 56958
+[05:16:24.727303] Epoch: [0]  [ 6980/15468]  eta: 11:17:48  lr: 0.000011  pix_loss: 0.2964 (0.5258)  pix_loss_CNN: 0.5128 (0.9490)  time: 4.7914  data: 0.0000  max mem: 56958
+[05:17:59.030644] Epoch: [0]  [ 7000/15468]  eta: 11:16:10  lr: 0.000011  pix_loss: 0.3188 (0.5251)  pix_loss_CNN: 0.5079 (0.9478)  time: 4.7151  data: 0.0000  max mem: 56958
+[05:19:34.436833] Epoch: [0]  [ 7020/15468]  eta: 11:14:34  lr: 0.000011  pix_loss: 0.2730 (0.5244)  pix_loss_CNN: 0.4778 (0.9464)  time: 4.7703  data: 0.0000  max mem: 56958
+[05:21:10.814765] Epoch: [0]  [ 7040/15468]  eta: 11:12:58  lr: 0.000011  pix_loss: 0.2807 (0.5238)  pix_loss_CNN: 0.4657 (0.9451)  time: 4.8189  data: 0.0000  max mem: 56958
+[05:22:46.998798] Epoch: [0]  [ 7060/15468]  eta: 11:11:23  lr: 0.000011  pix_loss: 0.2949 (0.5231)  pix_loss_CNN: 0.5063 (0.9439)  time: 4.8092  data: 0.0000  max mem: 56958
+[05:24:20.844227] Epoch: [0]  [ 7080/15468]  eta: 11:09:45  lr: 0.000011  pix_loss: 0.3190 (0.5225)  pix_loss_CNN: 0.5188 (0.9426)  time: 4.6922  data: 0.0000  max mem: 56958
+[05:25:58.223776] Epoch: [0]  [ 7100/15468]  eta: 11:08:11  lr: 0.000011  pix_loss: 0.3093 (0.5219)  pix_loss_CNN: 0.4973 (0.9414)  time: 4.8689  data: 0.0000  max mem: 56958
+[05:27:32.367935] Epoch: [0]  [ 7120/15468]  eta: 11:06:33  lr: 0.000012  pix_loss: 0.2982 (0.5213)  pix_loss_CNN: 0.5025 (0.9402)  time: 4.7072  data: 0.0000  max mem: 56958
+[05:29:12.747160] Epoch: [0]  [ 7140/15468]  eta: 11:05:03  lr: 0.000012  pix_loss: 0.2766 (0.5207)  pix_loss_CNN: 0.4764 (0.9389)  time: 5.0189  data: 0.0000  max mem: 56958
+[05:30:47.711646] Epoch: [0]  [ 7160/15468]  eta: 11:03:26  lr: 0.000012  pix_loss: 0.2885 (0.5200)  pix_loss_CNN: 0.4967 (0.9377)  time: 4.7482  data: 0.0000  max mem: 56958
+[05:32:22.777364] Epoch: [0]  [ 7180/15468]  eta: 11:01:49  lr: 0.000012  pix_loss: 0.3027 (0.5194)  pix_loss_CNN: 0.4952 (0.9365)  time: 4.7532  data: 0.0000  max mem: 56958
+[05:33:57.616031] Epoch: [0]  [ 7200/15468]  eta: 11:00:12  lr: 0.000012  pix_loss: 0.2846 (0.5188)  pix_loss_CNN: 0.4764 (0.9352)  time: 4.7419  data: 0.0000  max mem: 56958
+[05:35:31.423977] Epoch: [0]  [ 7220/15468]  eta: 10:58:34  lr: 0.000012  pix_loss: 0.2683 (0.5181)  pix_loss_CNN: 0.4871 (0.9340)  time: 4.6904  data: 0.0000  max mem: 56958
+[05:37:06.343213] Epoch: [0]  [ 7240/15468]  eta: 10:56:57  lr: 0.000012  pix_loss: 0.2827 (0.5175)  pix_loss_CNN: 0.4875 (0.9327)  time: 4.7459  data: 0.0000  max mem: 56958
+[05:38:37.842255] Epoch: [0]  [ 7260/15468]  eta: 10:55:17  lr: 0.000012  pix_loss: 0.2906 (0.5168)  pix_loss_CNN: 0.4881 (0.9315)  time: 4.5749  data: 0.0000  max mem: 56958
+[05:40:03.629047] Epoch: [0]  [ 7280/15468]  eta: 10:53:29  lr: 0.000012  pix_loss: 0.2746 (0.5162)  pix_loss_CNN: 0.4746 (0.9303)  time: 4.2893  data: 0.0000  max mem: 56958
+[05:41:27.555418] Epoch: [0]  [ 7300/15468]  eta: 10:51:40  lr: 0.000012  pix_loss: 0.2909 (0.5156)  pix_loss_CNN: 0.4892 (0.9291)  time: 4.1963  data: 0.0000  max mem: 56958
+[05:42:52.069474] Epoch: [0]  [ 7320/15468]  eta: 10:49:52  lr: 0.000012  pix_loss: 0.3082 (0.5150)  pix_loss_CNN: 0.5185 (0.9279)  time: 4.2257  data: 0.0000  max mem: 56958
+[05:44:15.949944] Epoch: [0]  [ 7340/15468]  eta: 10:48:03  lr: 0.000012  pix_loss: 0.2926 (0.5144)  pix_loss_CNN: 0.4819 (0.9267)  time: 4.1940  data: 0.0000  max mem: 56958
+[05:45:43.177362] Epoch: [0]  [ 7360/15468]  eta: 10:46:18  lr: 0.000012  pix_loss: 0.2740 (0.5138)  pix_loss_CNN: 0.4745 (0.9255)  time: 4.3613  data: 0.0000  max mem: 56958
+[05:47:08.392898] Epoch: [0]  [ 7380/15468]  eta: 10:44:31  lr: 0.000012  pix_loss: 0.3030 (0.5132)  pix_loss_CNN: 0.5067 (0.9244)  time: 4.2607  data: 0.0000  max mem: 56958
+[05:48:34.302792] Epoch: [0]  [ 7400/15468]  eta: 10:42:45  lr: 0.000012  pix_loss: 0.2772 (0.5126)  pix_loss_CNN: 0.4663 (0.9232)  time: 4.2955  data: 0.0000  max mem: 56958
+[05:49:59.467013] Epoch: [0]  [ 7420/15468]  eta: 10:40:58  lr: 0.000012  pix_loss: 0.2881 (0.5120)  pix_loss_CNN: 0.4788 (0.9220)  time: 4.2582  data: 0.0000  max mem: 56958
+[05:51:24.908189] Epoch: [0]  [ 7440/15468]  eta: 10:39:12  lr: 0.000012  pix_loss: 0.2539 (0.5113)  pix_loss_CNN: 0.4606 (0.9208)  time: 4.2720  data: 0.0000  max mem: 56958
+[05:52:49.241617] Epoch: [0]  [ 7460/15468]  eta: 10:37:24  lr: 0.000012  pix_loss: 0.2638 (0.5107)  pix_loss_CNN: 0.4582 (0.9196)  time: 4.2166  data: 0.0000  max mem: 56958
+[05:54:15.009629] Epoch: [0]  [ 7480/15468]  eta: 10:35:38  lr: 0.000012  pix_loss: 0.2786 (0.5101)  pix_loss_CNN: 0.4860 (0.9184)  time: 4.2884  data: 0.0000  max mem: 56958
+[05:55:40.445385] Epoch: [0]  [ 7500/15468]  eta: 10:33:52  lr: 0.000012  pix_loss: 0.2617 (0.5095)  pix_loss_CNN: 0.4704 (0.9172)  time: 4.2717  data: 0.0000  max mem: 56958
+[05:57:06.794762] Epoch: [0]  [ 7520/15468]  eta: 10:32:07  lr: 0.000012  pix_loss: 0.2824 (0.5089)  pix_loss_CNN: 0.4829 (0.9161)  time: 4.3174  data: 0.0000  max mem: 56958
+[05:58:31.037939] Epoch: [0]  [ 7540/15468]  eta: 10:30:20  lr: 0.000012  pix_loss: 0.2707 (0.5083)  pix_loss_CNN: 0.4732 (0.9149)  time: 4.2121  data: 0.0000  max mem: 56958
+[05:59:56.250023] Epoch: [0]  [ 7560/15468]  eta: 10:28:34  lr: 0.000012  pix_loss: 0.2549 (0.5076)  pix_loss_CNN: 0.4571 (0.9137)  time: 4.2606  data: 0.0000  max mem: 56958
+[06:01:23.762973] Epoch: [0]  [ 7580/15468]  eta: 10:26:50  lr: 0.000012  pix_loss: 0.2630 (0.5070)  pix_loss_CNN: 0.4653 (0.9125)  time: 4.3756  data: 0.0000  max mem: 56958
+[06:02:48.503000] Epoch: [0]  [ 7600/15468]  eta: 10:25:04  lr: 0.000012  pix_loss: 0.2711 (0.5064)  pix_loss_CNN: 0.4671 (0.9113)  time: 4.2370  data: 0.0000  max mem: 56958
+[06:04:10.165275] Epoch: [0]  [ 7620/15468]  eta: 10:23:14  lr: 0.000012  pix_loss: 0.2652 (0.5058)  pix_loss_CNN: 0.4625 (0.9101)  time: 4.0831  data: 0.0000  max mem: 56958
+[06:05:32.874294] Epoch: [0]  [ 7640/15468]  eta: 10:21:26  lr: 0.000012  pix_loss: 0.2672 (0.5052)  pix_loss_CNN: 0.4674 (0.9090)  time: 4.1354  data: 0.0000  max mem: 56958
+[06:06:56.533733] Epoch: [0]  [ 7660/15468]  eta: 10:19:39  lr: 0.000012  pix_loss: 0.2717 (0.5046)  pix_loss_CNN: 0.4619 (0.9079)  time: 4.1829  data: 0.0000  max mem: 56958
+[06:08:20.719588] Epoch: [0]  [ 7680/15468]  eta: 10:17:53  lr: 0.000012  pix_loss: 0.2863 (0.5040)  pix_loss_CNN: 0.4873 (0.9067)  time: 4.2093  data: 0.0000  max mem: 56958
+[06:09:46.534842] Epoch: [0]  [ 7700/15468]  eta: 10:16:08  lr: 0.000012  pix_loss: 0.2603 (0.5034)  pix_loss_CNN: 0.4806 (0.9056)  time: 4.2907  data: 0.0000  max mem: 56958
+[06:11:09.878106] Epoch: [0]  [ 7720/15468]  eta: 10:14:21  lr: 0.000012  pix_loss: 0.2664 (0.5027)  pix_loss_CNN: 0.4560 (0.9044)  time: 4.1671  data: 0.0000  max mem: 56958
+[06:13:12.918168] Epoch: [0]  [ 7740/15468]  eta: 10:13:13  lr: 0.000013  pix_loss: 0.2688 (0.5021)  pix_loss_CNN: 0.4668 (0.9033)  time: 6.1520  data: 0.0000  max mem: 56958
+[06:14:35.006172] Epoch: [0]  [ 7760/15468]  eta: 10:11:25  lr: 0.000013  pix_loss: 0.2623 (0.5015)  pix_loss_CNN: 0.4511 (0.9022)  time: 4.1043  data: 0.0000  max mem: 56958
+[06:16:00.590925] Epoch: [0]  [ 7780/15468]  eta: 10:09:41  lr: 0.000013  pix_loss: 0.2681 (0.5009)  pix_loss_CNN: 0.4733 (0.9011)  time: 4.2792  data: 0.0000  max mem: 56958
+[06:17:25.883534] Epoch: [0]  [ 7800/15468]  eta: 10:07:56  lr: 0.000013  pix_loss: 0.2555 (0.5003)  pix_loss_CNN: 0.4537 (0.8999)  time: 4.2646  data: 0.0000  max mem: 56958
+[06:18:50.809587] Epoch: [0]  [ 7820/15468]  eta: 10:06:11  lr: 0.000013  pix_loss: 0.2479 (0.4997)  pix_loss_CNN: 0.4464 (0.8988)  time: 4.2463  data: 0.0000  max mem: 56958
+[06:20:16.035963] Epoch: [0]  [ 7840/15468]  eta: 10:04:26  lr: 0.000013  pix_loss: 0.2707 (0.4991)  pix_loss_CNN: 0.4817 (0.8977)  time: 4.2613  data: 0.0000  max mem: 56958
+[06:21:40.369339] Epoch: [0]  [ 7860/15468]  eta: 10:02:40  lr: 0.000013  pix_loss: 0.2537 (0.4985)  pix_loss_CNN: 0.4485 (0.8966)  time: 4.2166  data: 0.0000  max mem: 56958
+[06:23:07.530234] Epoch: [0]  [ 7880/15468]  eta: 10:00:58  lr: 0.000013  pix_loss: 0.2610 (0.4980)  pix_loss_CNN: 0.4554 (0.8955)  time: 4.3580  data: 0.0000  max mem: 56958
+[06:24:31.498827] Epoch: [0]  [ 7900/15468]  eta: 9:59:12  lr: 0.000013  pix_loss: 0.2723 (0.4974)  pix_loss_CNN: 0.4725 (0.8945)  time: 4.1984  data: 0.0000  max mem: 56958
+[06:25:57.598533] Epoch: [0]  [ 7920/15468]  eta: 9:57:28  lr: 0.000013  pix_loss: 0.2809 (0.4969)  pix_loss_CNN: 0.4912 (0.8934)  time: 4.3049  data: 0.0000  max mem: 56958
+[06:27:24.164767] Epoch: [0]  [ 7940/15468]  eta: 9:55:46  lr: 0.000013  pix_loss: 0.2656 (0.4963)  pix_loss_CNN: 0.4653 (0.8924)  time: 4.3283  data: 0.0000  max mem: 56958
+[06:28:49.014968] Epoch: [0]  [ 7960/15468]  eta: 9:54:01  lr: 0.000013  pix_loss: 0.2583 (0.4957)  pix_loss_CNN: 0.4611 (0.8913)  time: 4.2425  data: 0.0000  max mem: 56958
+[06:30:12.767293] Epoch: [0]  [ 7980/15468]  eta: 9:52:16  lr: 0.000013  pix_loss: 0.2604 (0.4951)  pix_loss_CNN: 0.4615 (0.8902)  time: 4.1876  data: 0.0000  max mem: 56958
+[06:31:37.123933] Epoch: [0]  [ 8000/15468]  eta: 9:50:31  lr: 0.000013  pix_loss: 0.2732 (0.4946)  pix_loss_CNN: 0.4846 (0.8892)  time: 4.2178  data: 0.0000  max mem: 56958
+[06:33:03.449796] Epoch: [0]  [ 8020/15468]  eta: 9:48:48  lr: 0.000013  pix_loss: 0.2579 (0.4940)  pix_loss_CNN: 0.4490 (0.8881)  time: 4.3163  data: 0.0000  max mem: 56958
+[06:34:27.353794] Epoch: [0]  [ 8040/15468]  eta: 9:47:03  lr: 0.000013  pix_loss: 0.2598 (0.4934)  pix_loss_CNN: 0.4646 (0.8871)  time: 4.1952  data: 0.0000  max mem: 56958
+[06:35:51.332933] Epoch: [0]  [ 8060/15468]  eta: 9:45:18  lr: 0.000013  pix_loss: 0.2501 (0.4929)  pix_loss_CNN: 0.4651 (0.8860)  time: 4.1989  data: 0.0000  max mem: 56958
+[06:37:16.428511] Epoch: [0]  [ 8080/15468]  eta: 9:43:34  lr: 0.000013  pix_loss: 0.2515 (0.4923)  pix_loss_CNN: 0.4453 (0.8850)  time: 4.2547  data: 0.0000  max mem: 56958
+[06:38:41.542586] Epoch: [0]  [ 8100/15468]  eta: 9:41:51  lr: 0.000013  pix_loss: 0.2455 (0.4917)  pix_loss_CNN: 0.4515 (0.8839)  time: 4.2557  data: 0.0000  max mem: 56958
+[06:40:05.297730] Epoch: [0]  [ 8120/15468]  eta: 9:40:06  lr: 0.000013  pix_loss: 0.2535 (0.4911)  pix_loss_CNN: 0.4651 (0.8828)  time: 4.1877  data: 0.0000  max mem: 56958
+[06:41:29.145822] Epoch: [0]  [ 8140/15468]  eta: 9:38:22  lr: 0.000013  pix_loss: 0.2506 (0.4905)  pix_loss_CNN: 0.4420 (0.8817)  time: 4.1924  data: 0.0000  max mem: 56958
+[06:42:53.586184] Epoch: [0]  [ 8160/15468]  eta: 9:36:38  lr: 0.000013  pix_loss: 0.2575 (0.4899)  pix_loss_CNN: 0.4350 (0.8807)  time: 4.2220  data: 0.0000  max mem: 56958
+[06:44:18.175131] Epoch: [0]  [ 8180/15468]  eta: 9:34:54  lr: 0.000013  pix_loss: 0.2517 (0.4893)  pix_loss_CNN: 0.4593 (0.8796)  time: 4.2294  data: 0.0000  max mem: 56958
+[06:45:42.055545] Epoch: [0]  [ 8200/15468]  eta: 9:33:10  lr: 0.000013  pix_loss: 0.2515 (0.4888)  pix_loss_CNN: 0.4626 (0.8786)  time: 4.1940  data: 0.0000  max mem: 56958
+[06:47:07.962408] Epoch: [0]  [ 8220/15468]  eta: 9:31:27  lr: 0.000013  pix_loss: 0.2654 (0.4882)  pix_loss_CNN: 0.4679 (0.8776)  time: 4.2953  data: 0.0000  max mem: 56958
+[06:48:32.808726] Epoch: [0]  [ 8240/15468]  eta: 9:29:44  lr: 0.000013  pix_loss: 0.2472 (0.4877)  pix_loss_CNN: 0.4468 (0.8766)  time: 4.2423  data: 0.0000  max mem: 56958
+[06:49:56.011571] Epoch: [0]  [ 8260/15468]  eta: 9:28:00  lr: 0.000013  pix_loss: 0.2492 (0.4871)  pix_loss_CNN: 0.4394 (0.8755)  time: 4.1601  data: 0.0000  max mem: 56958
+[06:51:22.644900] Epoch: [0]  [ 8280/15468]  eta: 9:26:18  lr: 0.000013  pix_loss: 0.2427 (0.4865)  pix_loss_CNN: 0.4246 (0.8745)  time: 4.3316  data: 0.0000  max mem: 56958
+[06:52:47.842038] Epoch: [0]  [ 8300/15468]  eta: 9:24:36  lr: 0.000013  pix_loss: 0.2419 (0.4860)  pix_loss_CNN: 0.4373 (0.8735)  time: 4.2598  data: 0.0000  max mem: 56958
+[06:54:12.221635] Epoch: [0]  [ 8320/15468]  eta: 9:22:52  lr: 0.000013  pix_loss: 0.2456 (0.4854)  pix_loss_CNN: 0.4343 (0.8724)  time: 4.2189  data: 0.0000  max mem: 56958
+[06:55:34.062668] Epoch: [0]  [ 8340/15468]  eta: 9:21:07  lr: 0.000013  pix_loss: 0.2275 (0.4848)  pix_loss_CNN: 0.4168 (0.8714)  time: 4.0920  data: 0.0000  max mem: 56958
+[06:56:51.768960] Epoch: [0]  [ 8360/15468]  eta: 9:19:18  lr: 0.000014  pix_loss: 0.2646 (0.4843)  pix_loss_CNN: 0.4723 (0.8704)  time: 3.8853  data: 0.0000  max mem: 56958
+[06:58:18.352332] Epoch: [0]  [ 8380/15468]  eta: 9:17:37  lr: 0.000014  pix_loss: 0.2458 (0.4837)  pix_loss_CNN: 0.4371 (0.8694)  time: 4.3291  data: 0.0000  max mem: 56958
+[06:59:40.833252] Epoch: [0]  [ 8400/15468]  eta: 9:15:53  lr: 0.000014  pix_loss: 0.2474 (0.4832)  pix_loss_CNN: 0.4414 (0.8684)  time: 4.1240  data: 0.0000  max mem: 56958
+[07:01:07.449073] Epoch: [0]  [ 8420/15468]  eta: 9:14:12  lr: 0.000014  pix_loss: 0.2686 (0.4827)  pix_loss_CNN: 0.4598 (0.8674)  time: 4.3307  data: 0.0000  max mem: 56958
+[07:02:31.790567] Epoch: [0]  [ 8440/15468]  eta: 9:12:29  lr: 0.000014  pix_loss: 0.2329 (0.4821)  pix_loss_CNN: 0.4516 (0.8665)  time: 4.2170  data: 0.0000  max mem: 56958
+[07:03:57.303147] Epoch: [0]  [ 8460/15468]  eta: 9:10:48  lr: 0.000014  pix_loss: 0.2296 (0.4816)  pix_loss_CNN: 0.4339 (0.8655)  time: 4.2756  data: 0.0000  max mem: 56958
+[07:05:24.260426] Epoch: [0]  [ 8480/15468]  eta: 9:09:07  lr: 0.000014  pix_loss: 0.2504 (0.4810)  pix_loss_CNN: 0.4611 (0.8645)  time: 4.3478  data: 0.0000  max mem: 56958
+[07:06:49.675805] Epoch: [0]  [ 8500/15468]  eta: 9:07:26  lr: 0.000014  pix_loss: 0.2503 (0.4805)  pix_loss_CNN: 0.4432 (0.8635)  time: 4.2707  data: 0.0000  max mem: 56958
+[07:08:13.661968] Epoch: [0]  [ 8520/15468]  eta: 9:05:43  lr: 0.000014  pix_loss: 0.2460 (0.4799)  pix_loss_CNN: 0.4431 (0.8625)  time: 4.1993  data: 0.0000  max mem: 56958
+[07:09:38.338094] Epoch: [0]  [ 8540/15468]  eta: 9:04:01  lr: 0.000014  pix_loss: 0.2348 (0.4794)  pix_loss_CNN: 0.4451 (0.8615)  time: 4.2338  data: 0.0000  max mem: 56958
+[07:11:03.176500] Epoch: [0]  [ 8560/15468]  eta: 9:02:19  lr: 0.000014  pix_loss: 0.2399 (0.4788)  pix_loss_CNN: 0.4381 (0.8606)  time: 4.2419  data: 0.0000  max mem: 56958
+[07:12:28.308096] Epoch: [0]  [ 8580/15468]  eta: 9:00:38  lr: 0.000014  pix_loss: 0.2360 (0.4783)  pix_loss_CNN: 0.4263 (0.8595)  time: 4.2565  data: 0.0000  max mem: 56958
+[07:13:54.956211] Epoch: [0]  [ 8600/15468]  eta: 8:58:58  lr: 0.000014  pix_loss: 0.2228 (0.4777)  pix_loss_CNN: 0.4176 (0.8585)  time: 4.3324  data: 0.0000  max mem: 56958
+[07:15:17.410288] Epoch: [0]  [ 8620/15468]  eta: 8:57:14  lr: 0.000014  pix_loss: 0.2395 (0.4771)  pix_loss_CNN: 0.4329 (0.8575)  time: 4.1227  data: 0.0000  max mem: 56958
+[07:16:40.047942] Epoch: [0]  [ 8640/15468]  eta: 8:55:31  lr: 0.000014  pix_loss: 0.2504 (0.4766)  pix_loss_CNN: 0.4496 (0.8566)  time: 4.1318  data: 0.0000  max mem: 56958
+[07:18:06.785904] Epoch: [0]  [ 8660/15468]  eta: 8:53:51  lr: 0.000014  pix_loss: 0.2241 (0.4760)  pix_loss_CNN: 0.4144 (0.8556)  time: 4.3369  data: 0.0000  max mem: 56958
+[07:19:33.316422] Epoch: [0]  [ 8680/15468]  eta: 8:52:11  lr: 0.000014  pix_loss: 0.2258 (0.4754)  pix_loss_CNN: 0.4199 (0.8546)  time: 4.3265  data: 0.0000  max mem: 56958
+[07:20:56.292955] Epoch: [0]  [ 8700/15468]  eta: 8:50:28  lr: 0.000014  pix_loss: 0.2439 (0.4749)  pix_loss_CNN: 0.4288 (0.8536)  time: 4.1488  data: 0.0000  max mem: 56958
+[07:22:18.848654] Epoch: [0]  [ 8720/15468]  eta: 8:48:45  lr: 0.000014  pix_loss: 0.2429 (0.4743)  pix_loss_CNN: 0.4270 (0.8526)  time: 4.1277  data: 0.0000  max mem: 56958
+[07:23:42.257784] Epoch: [0]  [ 8740/15468]  eta: 8:47:03  lr: 0.000014  pix_loss: 0.2171 (0.4738)  pix_loss_CNN: 0.4197 (0.8516)  time: 4.1704  data: 0.0000  max mem: 56958
+[07:25:09.072146] Epoch: [0]  [ 8760/15468]  eta: 8:45:23  lr: 0.000014  pix_loss: 0.2234 (0.4732)  pix_loss_CNN: 0.4097 (0.8507)  time: 4.3407  data: 0.0000  max mem: 56958
+[07:26:31.188362] Epoch: [0]  [ 8780/15468]  eta: 8:43:40  lr: 0.000014  pix_loss: 0.2192 (0.4726)  pix_loss_CNN: 0.4037 (0.8497)  time: 4.1058  data: 0.0000  max mem: 56958
+[07:27:58.644211] Epoch: [0]  [ 8800/15468]  eta: 8:42:02  lr: 0.000014  pix_loss: 0.2329 (0.4721)  pix_loss_CNN: 0.4245 (0.8487)  time: 4.3728  data: 0.0000  max mem: 56958
+[07:29:25.778903] Epoch: [0]  [ 8820/15468]  eta: 8:40:22  lr: 0.000014  pix_loss: 0.2206 (0.4716)  pix_loss_CNN: 0.4106 (0.8478)  time: 4.3567  data: 0.0000  max mem: 56958
+[07:30:49.102847] Epoch: [0]  [ 8840/15468]  eta: 8:38:41  lr: 0.000014  pix_loss: 0.2207 (0.4710)  pix_loss_CNN: 0.4243 (0.8468)  time: 4.1662  data: 0.0000  max mem: 56958
+[07:32:15.004282] Epoch: [0]  [ 8860/15468]  eta: 8:37:01  lr: 0.000014  pix_loss: 0.2283 (0.4705)  pix_loss_CNN: 0.4254 (0.8458)  time: 4.2950  data: 0.0000  max mem: 56958
+[07:33:41.998214] Epoch: [0]  [ 8880/15468]  eta: 8:35:22  lr: 0.000014  pix_loss: 0.2307 (0.4699)  pix_loss_CNN: 0.4110 (0.8449)  time: 4.3497  data: 0.0000  max mem: 56958
+[07:35:10.399823] Epoch: [0]  [ 8900/15468]  eta: 8:33:44  lr: 0.000014  pix_loss: 0.2362 (0.4694)  pix_loss_CNN: 0.4410 (0.8440)  time: 4.4200  data: 0.0000  max mem: 56958
+[07:36:34.961759] Epoch: [0]  [ 8920/15468]  eta: 8:32:03  lr: 0.000014  pix_loss: 0.2326 (0.4689)  pix_loss_CNN: 0.4256 (0.8430)  time: 4.2281  data: 0.0000  max mem: 56958
+[07:38:01.629734] Epoch: [0]  [ 8940/15468]  eta: 8:30:24  lr: 0.000014  pix_loss: 0.2479 (0.4684)  pix_loss_CNN: 0.4482 (0.8421)  time: 4.3334  data: 0.0000  max mem: 56958
+[07:39:26.934911] Epoch: [0]  [ 8960/15468]  eta: 8:28:44  lr: 0.000014  pix_loss: 0.2288 (0.4679)  pix_loss_CNN: 0.4304 (0.8412)  time: 4.2652  data: 0.0000  max mem: 56958
+[07:40:49.976737] Epoch: [0]  [ 8980/15468]  eta: 8:27:02  lr: 0.000015  pix_loss: 0.2181 (0.4673)  pix_loss_CNN: 0.4247 (0.8403)  time: 4.1521  data: 0.0000  max mem: 56958
+[07:42:15.391810] Epoch: [0]  [ 9000/15468]  eta: 8:25:23  lr: 0.000015  pix_loss: 0.2255 (0.4668)  pix_loss_CNN: 0.4236 (0.8394)  time: 4.2707  data: 0.0000  max mem: 56958
+[07:43:38.479943] Epoch: [0]  [ 9020/15468]  eta: 8:23:41  lr: 0.000015  pix_loss: 0.2104 (0.4663)  pix_loss_CNN: 0.4127 (0.8385)  time: 4.1544  data: 0.0000  max mem: 56958
+[07:45:04.769977] Epoch: [0]  [ 9040/15468]  eta: 8:22:02  lr: 0.000015  pix_loss: 0.2489 (0.4658)  pix_loss_CNN: 0.4240 (0.8376)  time: 4.3145  data: 0.0000  max mem: 56958
+[07:46:30.016490] Epoch: [0]  [ 9060/15468]  eta: 8:20:22  lr: 0.000015  pix_loss: 0.2090 (0.4652)  pix_loss_CNN: 0.3998 (0.8366)  time: 4.2623  data: 0.0000  max mem: 56958
+[07:47:57.841866] Epoch: [0]  [ 9080/15468]  eta: 8:18:45  lr: 0.000015  pix_loss: 0.2120 (0.4647)  pix_loss_CNN: 0.4190 (0.8357)  time: 4.3912  data: 0.0000  max mem: 56958
+[07:49:19.888295] Epoch: [0]  [ 9100/15468]  eta: 8:17:03  lr: 0.000015  pix_loss: 0.2071 (0.4642)  pix_loss_CNN: 0.4026 (0.8348)  time: 4.1023  data: 0.0000  max mem: 56958
+[07:50:47.847112] Epoch: [0]  [ 9120/15468]  eta: 8:15:25  lr: 0.000015  pix_loss: 0.2235 (0.4636)  pix_loss_CNN: 0.4249 (0.8338)  time: 4.3979  data: 0.0000  max mem: 56958
+[07:52:15.018325] Epoch: [0]  [ 9140/15468]  eta: 8:13:47  lr: 0.000015  pix_loss: 0.2180 (0.4631)  pix_loss_CNN: 0.3984 (0.8329)  time: 4.3585  data: 0.0000  max mem: 56958
+[07:53:40.167204] Epoch: [0]  [ 9160/15468]  eta: 8:12:08  lr: 0.000015  pix_loss: 0.2118 (0.4626)  pix_loss_CNN: 0.4097 (0.8320)  time: 4.2574  data: 0.0000  max mem: 56958
+[07:55:05.137457] Epoch: [0]  [ 9180/15468]  eta: 8:10:28  lr: 0.000015  pix_loss: 0.2300 (0.4621)  pix_loss_CNN: 0.4297 (0.8311)  time: 4.2485  data: 0.0000  max mem: 56958
+[07:56:29.835355] Epoch: [0]  [ 9200/15468]  eta: 8:08:48  lr: 0.000015  pix_loss: 0.2095 (0.4615)  pix_loss_CNN: 0.4039 (0.8302)  time: 4.2349  data: 0.0000  max mem: 56958
+[07:57:55.033387] Epoch: [0]  [ 9220/15468]  eta: 8:07:09  lr: 0.000015  pix_loss: 0.2067 (0.4610)  pix_loss_CNN: 0.3964 (0.8293)  time: 4.2599  data: 0.0000  max mem: 56958
+[07:59:19.941571] Epoch: [0]  [ 9240/15468]  eta: 8:05:30  lr: 0.000015  pix_loss: 0.2146 (0.4605)  pix_loss_CNN: 0.4111 (0.8284)  time: 4.2454  data: 0.0000  max mem: 56958
+[08:00:45.666419] Epoch: [0]  [ 9260/15468]  eta: 8:03:51  lr: 0.000015  pix_loss: 0.2159 (0.4599)  pix_loss_CNN: 0.4060 (0.8275)  time: 4.2862  data: 0.0000  max mem: 56958
+[08:02:12.785048] Epoch: [0]  [ 9280/15468]  eta: 8:02:13  lr: 0.000015  pix_loss: 0.2269 (0.4594)  pix_loss_CNN: 0.4133 (0.8266)  time: 4.3559  data: 0.0000  max mem: 56958
+[08:03:39.626886] Epoch: [0]  [ 9300/15468]  eta: 8:00:35  lr: 0.000015  pix_loss: 0.2144 (0.4589)  pix_loss_CNN: 0.4027 (0.8257)  time: 4.3421  data: 0.0000  max mem: 56958
+[08:05:07.155868] Epoch: [0]  [ 9320/15468]  eta: 7:58:58  lr: 0.000015  pix_loss: 0.2243 (0.4584)  pix_loss_CNN: 0.4197 (0.8248)  time: 4.3764  data: 0.0000  max mem: 56958
+[08:06:35.541540] Epoch: [0]  [ 9340/15468]  eta: 7:57:21  lr: 0.000015  pix_loss: 0.2304 (0.4579)  pix_loss_CNN: 0.4199 (0.8239)  time: 4.4192  data: 0.0000  max mem: 56958
+[08:08:02.276926] Epoch: [0]  [ 9360/15468]  eta: 7:55:43  lr: 0.000015  pix_loss: 0.2157 (0.4574)  pix_loss_CNN: 0.4038 (0.8231)  time: 4.3367  data: 0.0000  max mem: 56958
+[08:09:26.873256] Epoch: [0]  [ 9380/15468]  eta: 7:54:04  lr: 0.000015  pix_loss: 0.1984 (0.4569)  pix_loss_CNN: 0.3957 (0.8222)  time: 4.2298  data: 0.0000  max mem: 56958
+[08:10:53.420461] Epoch: [0]  [ 9400/15468]  eta: 7:52:26  lr: 0.000015  pix_loss: 0.2191 (0.4564)  pix_loss_CNN: 0.4125 (0.8213)  time: 4.3273  data: 0.0000  max mem: 56958
+[08:12:19.289183] Epoch: [0]  [ 9420/15468]  eta: 7:50:48  lr: 0.000015  pix_loss: 0.1899 (0.4558)  pix_loss_CNN: 0.3860 (0.8204)  time: 4.2934  data: 0.0000  max mem: 56958
+[08:13:43.111948] Epoch: [0]  [ 9440/15468]  eta: 7:49:08  lr: 0.000015  pix_loss: 0.1944 (0.4553)  pix_loss_CNN: 0.3825 (0.8195)  time: 4.1911  data: 0.0000  max mem: 56958
+[08:15:07.410883] Epoch: [0]  [ 9460/15468]  eta: 7:47:29  lr: 0.000015  pix_loss: 0.2015 (0.4547)  pix_loss_CNN: 0.3967 (0.8186)  time: 4.2149  data: 0.0000  max mem: 56958
+[08:16:35.051531] Epoch: [0]  [ 9480/15468]  eta: 7:45:52  lr: 0.000015  pix_loss: 0.2019 (0.4542)  pix_loss_CNN: 0.3676 (0.8177)  time: 4.3820  data: 0.0000  max mem: 56958
+[08:18:00.623757] Epoch: [0]  [ 9500/15468]  eta: 7:44:14  lr: 0.000015  pix_loss: 0.2173 (0.4537)  pix_loss_CNN: 0.3987 (0.8168)  time: 4.2786  data: 0.0000  max mem: 56958
+[08:19:24.392758] Epoch: [0]  [ 9520/15468]  eta: 7:42:34  lr: 0.000015  pix_loss: 0.2176 (0.4532)  pix_loss_CNN: 0.4099 (0.8160)  time: 4.1884  data: 0.0000  max mem: 56958
+[08:20:52.134032] Epoch: [0]  [ 9540/15468]  eta: 7:40:58  lr: 0.000015  pix_loss: 0.1907 (0.4527)  pix_loss_CNN: 0.3818 (0.8151)  time: 4.3870  data: 0.0000  max mem: 56958
+[08:22:19.662853] Epoch: [0]  [ 9560/15468]  eta: 7:39:21  lr: 0.000015  pix_loss: 0.2208 (0.4522)  pix_loss_CNN: 0.4241 (0.8143)  time: 4.3764  data: 0.0000  max mem: 56958
+[08:23:44.449580] Epoch: [0]  [ 9580/15468]  eta: 7:37:42  lr: 0.000015  pix_loss: 0.2068 (0.4517)  pix_loss_CNN: 0.4005 (0.8134)  time: 4.2393  data: 0.0000  max mem: 56958
+[08:25:09.749394] Epoch: [0]  [ 9600/15468]  eta: 7:36:04  lr: 0.000016  pix_loss: 0.2032 (0.4512)  pix_loss_CNN: 0.4084 (0.8126)  time: 4.2649  data: 0.0000  max mem: 56958
+[08:26:34.001028] Epoch: [0]  [ 9620/15468]  eta: 7:34:25  lr: 0.000016  pix_loss: 0.2042 (0.4507)  pix_loss_CNN: 0.3930 (0.8117)  time: 4.2125  data: 0.0000  max mem: 56958
+[08:28:00.346753] Epoch: [0]  [ 9640/15468]  eta: 7:32:48  lr: 0.000016  pix_loss: 0.2130 (0.4502)  pix_loss_CNN: 0.3905 (0.8108)  time: 4.3172  data: 0.0000  max mem: 56958
+[08:29:26.556781] Epoch: [0]  [ 9660/15468]  eta: 7:31:10  lr: 0.000016  pix_loss: 0.2112 (0.4497)  pix_loss_CNN: 0.4150 (0.8100)  time: 4.3105  data: 0.0000  max mem: 56958
+[08:30:51.540002] Epoch: [0]  [ 9680/15468]  eta: 7:29:32  lr: 0.000016  pix_loss: 0.2100 (0.4492)  pix_loss_CNN: 0.4061 (0.8092)  time: 4.2491  data: 0.0000  max mem: 56958
+[08:32:16.699207] Epoch: [0]  [ 9700/15468]  eta: 7:27:54  lr: 0.000016  pix_loss: 0.1919 (0.4487)  pix_loss_CNN: 0.3823 (0.8083)  time: 4.2579  data: 0.0000  max mem: 56958
+[08:33:40.579263] Epoch: [0]  [ 9720/15468]  eta: 7:26:15  lr: 0.000016  pix_loss: 0.2084 (0.4482)  pix_loss_CNN: 0.4159 (0.8075)  time: 4.1940  data: 0.0000  max mem: 56958
+[08:35:05.770440] Epoch: [0]  [ 9740/15468]  eta: 7:24:38  lr: 0.000016  pix_loss: 0.2131 (0.4477)  pix_loss_CNN: 0.4119 (0.8067)  time: 4.2595  data: 0.0000  max mem: 56958
+[08:36:28.613593] Epoch: [0]  [ 9760/15468]  eta: 7:22:58  lr: 0.000016  pix_loss: 0.2069 (0.4472)  pix_loss_CNN: 0.4006 (0.8059)  time: 4.1421  data: 0.0000  max mem: 56958
+[08:37:51.263636] Epoch: [0]  [ 9780/15468]  eta: 7:21:19  lr: 0.000016  pix_loss: 0.2127 (0.4468)  pix_loss_CNN: 0.3992 (0.8050)  time: 4.1325  data: 0.0000  max mem: 56958
+[08:39:16.822366] Epoch: [0]  [ 9800/15468]  eta: 7:19:42  lr: 0.000016  pix_loss: 0.1971 (0.4462)  pix_loss_CNN: 0.3805 (0.8042)  time: 4.2779  data: 0.0000  max mem: 56958
+[08:40:44.557387] Epoch: [0]  [ 9820/15468]  eta: 7:18:06  lr: 0.000016  pix_loss: 0.2096 (0.4458)  pix_loss_CNN: 0.3941 (0.8034)  time: 4.3867  data: 0.0000  max mem: 56958
+[08:42:09.190736] Epoch: [0]  [ 9840/15468]  eta: 7:16:28  lr: 0.000016  pix_loss: 0.2046 (0.4453)  pix_loss_CNN: 0.3939 (0.8025)  time: 4.2316  data: 0.0000  max mem: 56958
+[08:43:35.843520] Epoch: [0]  [ 9860/15468]  eta: 7:14:51  lr: 0.000016  pix_loss: 0.1991 (0.4448)  pix_loss_CNN: 0.3902 (0.8018)  time: 4.3326  data: 0.0000  max mem: 56958
+[08:44:58.336782] Epoch: [0]  [ 9880/15468]  eta: 7:13:12  lr: 0.000016  pix_loss: 0.1998 (0.4443)  pix_loss_CNN: 0.3933 (0.8009)  time: 4.1246  data: 0.0000  max mem: 56958
+[08:46:21.379042] Epoch: [0]  [ 9900/15468]  eta: 7:11:33  lr: 0.000016  pix_loss: 0.1955 (0.4438)  pix_loss_CNN: 0.3999 (0.8001)  time: 4.1521  data: 0.0000  max mem: 56958
+[08:47:44.511425] Epoch: [0]  [ 9920/15468]  eta: 7:09:55  lr: 0.000016  pix_loss: 0.1967 (0.4433)  pix_loss_CNN: 0.3904 (0.7993)  time: 4.1566  data: 0.0000  max mem: 56958
+[08:49:11.172589] Epoch: [0]  [ 9940/15468]  eta: 7:08:18  lr: 0.000016  pix_loss: 0.2115 (0.4429)  pix_loss_CNN: 0.3916 (0.7985)  time: 4.3330  data: 0.0000  max mem: 56958
+[08:50:35.466212] Epoch: [0]  [ 9960/15468]  eta: 7:06:40  lr: 0.000016  pix_loss: 0.2063 (0.4424)  pix_loss_CNN: 0.3997 (0.7977)  time: 4.2146  data: 0.0000  max mem: 56958
+[08:52:01.461203] Epoch: [0]  [ 9980/15468]  eta: 7:05:04  lr: 0.000016  pix_loss: 0.1997 (0.4419)  pix_loss_CNN: 0.3859 (0.7969)  time: 4.2997  data: 0.0000  max mem: 56958
+[08:53:26.113237] Epoch: [0]  [10000/15468]  eta: 7:03:26  lr: 0.000016  pix_loss: 0.1845 (0.4415)  pix_loss_CNN: 0.3824 (0.7961)  time: 4.2326  data: 0.0000  max mem: 56958
+[08:54:51.076491] Epoch: [0]  [10020/15468]  eta: 7:01:49  lr: 0.000016  pix_loss: 0.1950 (0.4410)  pix_loss_CNN: 0.3719 (0.7952)  time: 4.2481  data: 0.0000  max mem: 56958
+[08:56:18.110940] Epoch: [0]  [10040/15468]  eta: 7:00:13  lr: 0.000016  pix_loss: 0.1958 (0.4405)  pix_loss_CNN: 0.3962 (0.7944)  time: 4.3517  data: 0.0000  max mem: 56958
+[08:57:43.304965] Epoch: [0]  [10060/15468]  eta: 6:58:36  lr: 0.000016  pix_loss: 0.1868 (0.4400)  pix_loss_CNN: 0.3732 (0.7936)  time: 4.2597  data: 0.0000  max mem: 56958
+[08:59:08.357189] Epoch: [0]  [10080/15468]  eta: 6:56:59  lr: 0.000016  pix_loss: 0.1982 (0.4395)  pix_loss_CNN: 0.3818 (0.7928)  time: 4.2526  data: 0.0000  max mem: 56958
+[09:00:34.377318] Epoch: [0]  [10100/15468]  eta: 6:55:22  lr: 0.000016  pix_loss: 0.1928 (0.4390)  pix_loss_CNN: 0.3814 (0.7920)  time: 4.3010  data: 0.0000  max mem: 56958
+[09:02:00.025453] Epoch: [0]  [10120/15468]  eta: 6:53:46  lr: 0.000016  pix_loss: 0.1987 (0.4386)  pix_loss_CNN: 0.3843 (0.7912)  time: 4.2824  data: 0.0000  max mem: 56958
+[09:03:25.360095] Epoch: [0]  [10140/15468]  eta: 6:52:09  lr: 0.000016  pix_loss: 0.2002 (0.4381)  pix_loss_CNN: 0.3910 (0.7904)  time: 4.2667  data: 0.0000  max mem: 56958
+[09:04:51.270674] Epoch: [0]  [10160/15468]  eta: 6:50:32  lr: 0.000016  pix_loss: 0.1910 (0.4376)  pix_loss_CNN: 0.3762 (0.7896)  time: 4.2955  data: 0.0000  max mem: 56958
+[09:06:16.919079] Epoch: [0]  [10180/15468]  eta: 6:48:56  lr: 0.000016  pix_loss: 0.1846 (0.4371)  pix_loss_CNN: 0.3752 (0.7888)  time: 4.2824  data: 0.0000  max mem: 56958
+[09:07:43.655627] Epoch: [0]  [10200/15468]  eta: 6:47:20  lr: 0.000016  pix_loss: 0.1823 (0.4366)  pix_loss_CNN: 0.3864 (0.7880)  time: 4.3368  data: 0.0000  max mem: 56958
+[09:09:08.441978] Epoch: [0]  [10220/15468]  eta: 6:45:43  lr: 0.000017  pix_loss: 0.1779 (0.4361)  pix_loss_CNN: 0.3765 (0.7872)  time: 4.2393  data: 0.0000  max mem: 56958
+[09:10:32.250912] Epoch: [0]  [10240/15468]  eta: 6:44:06  lr: 0.000017  pix_loss: 0.1986 (0.4357)  pix_loss_CNN: 0.3753 (0.7864)  time: 4.1904  data: 0.0000  max mem: 56958
+[09:11:59.853385] Epoch: [0]  [10260/15468]  eta: 6:42:30  lr: 0.000017  pix_loss: 0.1838 (0.4352)  pix_loss_CNN: 0.3780 (0.7856)  time: 4.3801  data: 0.0000  max mem: 56958
+[09:13:25.061126] Epoch: [0]  [10280/15468]  eta: 6:40:54  lr: 0.000017  pix_loss: 0.1910 (0.4347)  pix_loss_CNN: 0.3766 (0.7848)  time: 4.2603  data: 0.0000  max mem: 56958
+[09:14:50.628680] Epoch: [0]  [10300/15468]  eta: 6:39:17  lr: 0.000017  pix_loss: 0.1841 (0.4343)  pix_loss_CNN: 0.3799 (0.7840)  time: 4.2783  data: 0.0000  max mem: 56958
+[09:16:19.411802] Epoch: [0]  [10320/15468]  eta: 6:37:43  lr: 0.000017  pix_loss: 0.1995 (0.4338)  pix_loss_CNN: 0.3951 (0.7833)  time: 4.4391  data: 0.0000  max mem: 56958
+[09:17:44.473930] Epoch: [0]  [10340/15468]  eta: 6:36:06  lr: 0.000017  pix_loss: 0.1744 (0.4333)  pix_loss_CNN: 0.3734 (0.7825)  time: 4.2531  data: 0.0000  max mem: 56958
+[09:19:11.375030] Epoch: [0]  [10360/15468]  eta: 6:34:31  lr: 0.000017  pix_loss: 0.2008 (0.4329)  pix_loss_CNN: 0.3954 (0.7818)  time: 4.3450  data: 0.0000  max mem: 56958
+[09:20:38.910307] Epoch: [0]  [10380/15468]  eta: 6:32:55  lr: 0.000017  pix_loss: 0.1879 (0.4324)  pix_loss_CNN: 0.3773 (0.7810)  time: 4.3767  data: 0.0000  max mem: 56958
+[09:22:03.797549] Epoch: [0]  [10400/15468]  eta: 6:31:19  lr: 0.000017  pix_loss: 0.1992 (0.4320)  pix_loss_CNN: 0.3871 (0.7802)  time: 4.2443  data: 0.0000  max mem: 56958
+[09:23:30.309488] Epoch: [0]  [10420/15468]  eta: 6:29:43  lr: 0.000017  pix_loss: 0.1849 (0.4315)  pix_loss_CNN: 0.3763 (0.7795)  time: 4.3256  data: 0.0000  max mem: 56958
+[09:24:54.838135] Epoch: [0]  [10440/15468]  eta: 6:28:07  lr: 0.000017  pix_loss: 0.1958 (0.4310)  pix_loss_CNN: 0.3787 (0.7787)  time: 4.2264  data: 0.0000  max mem: 56958
+[09:26:20.583614] Epoch: [0]  [10460/15468]  eta: 6:26:31  lr: 0.000017  pix_loss: 0.1978 (0.4306)  pix_loss_CNN: 0.3932 (0.7779)  time: 4.2872  data: 0.0000  max mem: 56958
+[09:27:43.445379] Epoch: [0]  [10480/15468]  eta: 6:24:54  lr: 0.000017  pix_loss: 0.1754 (0.4301)  pix_loss_CNN: 0.3552 (0.7772)  time: 4.1430  data: 0.0000  max mem: 56958
+[09:29:10.368877] Epoch: [0]  [10500/15468]  eta: 6:23:18  lr: 0.000017  pix_loss: 0.2009 (0.4297)  pix_loss_CNN: 0.3783 (0.7764)  time: 4.3461  data: 0.0000  max mem: 56958
+[09:30:36.440050] Epoch: [0]  [10520/15468]  eta: 6:21:43  lr: 0.000017  pix_loss: 0.1900 (0.4292)  pix_loss_CNN: 0.3592 (0.7756)  time: 4.3035  data: 0.0000  max mem: 56958
+[09:32:03.365980] Epoch: [0]  [10540/15468]  eta: 6:20:07  lr: 0.000017  pix_loss: 0.1915 (0.4287)  pix_loss_CNN: 0.3869 (0.7749)  time: 4.3463  data: 0.0000  max mem: 56958
+[09:33:31.256412] Epoch: [0]  [10560/15468]  eta: 6:18:33  lr: 0.000017  pix_loss: 0.1813 (0.4283)  pix_loss_CNN: 0.3586 (0.7741)  time: 4.3945  data: 0.0000  max mem: 56958
+[09:34:58.610363] Epoch: [0]  [10580/15468]  eta: 6:16:58  lr: 0.000017  pix_loss: 0.1826 (0.4278)  pix_loss_CNN: 0.3746 (0.7733)  time: 4.3677  data: 0.0000  max mem: 56958
+[09:36:27.948655] Epoch: [0]  [10600/15468]  eta: 6:15:24  lr: 0.000017  pix_loss: 0.1909 (0.4274)  pix_loss_CNN: 0.3829 (0.7726)  time: 4.4669  data: 0.0000  max mem: 56958
+[09:37:53.086669] Epoch: [0]  [10620/15468]  eta: 6:13:48  lr: 0.000017  pix_loss: 0.1834 (0.4269)  pix_loss_CNN: 0.3633 (0.7719)  time: 4.2569  data: 0.0000  max mem: 56958
+[09:39:17.706025] Epoch: [0]  [10640/15468]  eta: 6:12:12  lr: 0.000017  pix_loss: 0.1955 (0.4265)  pix_loss_CNN: 0.3884 (0.7712)  time: 4.2309  data: 0.0000  max mem: 56958
+[09:40:41.861112] Epoch: [0]  [10660/15468]  eta: 6:10:35  lr: 0.000017  pix_loss: 0.1775 (0.4260)  pix_loss_CNN: 0.3755 (0.7704)  time: 4.2077  data: 0.0000  max mem: 56958
+[09:42:11.303963] Epoch: [0]  [10680/15468]  eta: 6:09:02  lr: 0.000017  pix_loss: 0.1820 (0.4256)  pix_loss_CNN: 0.3773 (0.7697)  time: 4.4721  data: 0.0000  max mem: 56958
+[09:43:37.138341] Epoch: [0]  [10700/15468]  eta: 6:07:26  lr: 0.000017  pix_loss: 0.1797 (0.4251)  pix_loss_CNN: 0.3687 (0.7689)  time: 4.2917  data: 0.0000  max mem: 56958
+[09:45:02.121621] Epoch: [0]  [10720/15468]  eta: 6:05:50  lr: 0.000017  pix_loss: 0.1850 (0.4247)  pix_loss_CNN: 0.3692 (0.7682)  time: 4.2491  data: 0.0000  max mem: 56958
+[09:46:26.054039] Epoch: [0]  [10740/15468]  eta: 6:04:14  lr: 0.000017  pix_loss: 0.1972 (0.4242)  pix_loss_CNN: 0.3829 (0.7675)  time: 4.1966  data: 0.0000  max mem: 56958
+[09:47:48.524664] Epoch: [0]  [10760/15468]  eta: 6:02:37  lr: 0.000017  pix_loss: 0.1750 (0.4238)  pix_loss_CNN: 0.3656 (0.7667)  time: 4.1235  data: 0.0000  max mem: 56958
+[09:49:13.969471] Epoch: [0]  [10780/15468]  eta: 6:01:02  lr: 0.000017  pix_loss: 0.1726 (0.4233)  pix_loss_CNN: 0.3588 (0.7659)  time: 4.2722  data: 0.0000  max mem: 56958
+[09:50:39.386345] Epoch: [0]  [10800/15468]  eta: 5:59:26  lr: 0.000017  pix_loss: 0.1728 (0.4229)  pix_loss_CNN: 0.3598 (0.7652)  time: 4.2708  data: 0.0000  max mem: 56958
+[09:52:19.032863] Epoch: [0]  [10820/15468]  eta: 5:57:57  lr: 0.000017  pix_loss: 0.1822 (0.4224)  pix_loss_CNN: 0.3582 (0.7645)  time: 4.9823  data: 0.0000  max mem: 56958
+[09:53:48.961755] Epoch: [0]  [10840/15468]  eta: 5:56:24  lr: 0.000018  pix_loss: 0.1733 (0.4220)  pix_loss_CNN: 0.3720 (0.7637)  time: 4.4964  data: 0.0000  max mem: 56958
+[09:55:16.936810] Epoch: [0]  [10860/15468]  eta: 5:54:49  lr: 0.000018  pix_loss: 0.1833 (0.4215)  pix_loss_CNN: 0.3579 (0.7630)  time: 4.3987  data: 0.0000  max mem: 56958
+[09:56:43.578924] Epoch: [0]  [10880/15468]  eta: 5:53:14  lr: 0.000018  pix_loss: 0.1737 (0.4211)  pix_loss_CNN: 0.3474 (0.7623)  time: 4.3321  data: 0.0000  max mem: 56958
+[09:58:12.499300] Epoch: [0]  [10900/15468]  eta: 5:51:41  lr: 0.000018  pix_loss: 0.1930 (0.4207)  pix_loss_CNN: 0.3799 (0.7616)  time: 4.4460  data: 0.0000  max mem: 56958
+[09:59:38.631629] Epoch: [0]  [10920/15468]  eta: 5:50:06  lr: 0.000018  pix_loss: 0.1771 (0.4202)  pix_loss_CNN: 0.3526 (0.7608)  time: 4.3066  data: 0.0000  max mem: 56958
+[10:01:03.894563] Epoch: [0]  [10940/15468]  eta: 5:48:30  lr: 0.000018  pix_loss: 0.1831 (0.4198)  pix_loss_CNN: 0.3644 (0.7601)  time: 4.2631  data: 0.0000  max mem: 56958
+[10:02:39.687282] Epoch: [0]  [10960/15468]  eta: 5:46:59  lr: 0.000018  pix_loss: 0.1807 (0.4194)  pix_loss_CNN: 0.3743 (0.7594)  time: 4.7896  data: 0.0000  max mem: 56958
+[10:04:21.166414] Epoch: [0]  [10980/15468]  eta: 5:45:31  lr: 0.000018  pix_loss: 0.1816 (0.4189)  pix_loss_CNN: 0.3756 (0.7587)  time: 5.0739  data: 0.0000  max mem: 56958
+[10:05:47.172465] Epoch: [0]  [11000/15468]  eta: 5:43:56  lr: 0.000018  pix_loss: 0.1842 (0.4185)  pix_loss_CNN: 0.3685 (0.7580)  time: 4.3003  data: 0.0000  max mem: 56958
+[10:07:11.898182] Epoch: [0]  [11020/15468]  eta: 5:42:20  lr: 0.000018  pix_loss: 0.1811 (0.4181)  pix_loss_CNN: 0.3690 (0.7573)  time: 4.2362  data: 0.0000  max mem: 56958
+[10:08:38.485332] Epoch: [0]  [11040/15468]  eta: 5:40:46  lr: 0.000018  pix_loss: 0.1766 (0.4176)  pix_loss_CNN: 0.3581 (0.7566)  time: 4.3293  data: 0.0000  max mem: 56958
+[10:10:04.958550] Epoch: [0]  [11060/15468]  eta: 5:39:11  lr: 0.000018  pix_loss: 0.1609 (0.4172)  pix_loss_CNN: 0.3519 (0.7558)  time: 4.3236  data: 0.0000  max mem: 56958
+[10:11:35.074396] Epoch: [0]  [11080/15468]  eta: 5:37:38  lr: 0.000018  pix_loss: 0.1769 (0.4168)  pix_loss_CNN: 0.3625 (0.7552)  time: 4.5058  data: 0.0000  max mem: 56958
+[10:13:00.627355] Epoch: [0]  [11100/15468]  eta: 5:36:03  lr: 0.000018  pix_loss: 0.1590 (0.4163)  pix_loss_CNN: 0.3453 (0.7544)  time: 4.2776  data: 0.0000  max mem: 56958
+[10:14:27.907543] Epoch: [0]  [11120/15468]  eta: 5:34:28  lr: 0.000018  pix_loss: 0.1663 (0.4159)  pix_loss_CNN: 0.3604 (0.7537)  time: 4.3640  data: 0.0000  max mem: 56958
+[10:15:51.978389] Epoch: [0]  [11140/15468]  eta: 5:32:53  lr: 0.000018  pix_loss: 0.1791 (0.4155)  pix_loss_CNN: 0.3718 (0.7530)  time: 4.2035  data: 0.0000  max mem: 56958
+[10:17:18.350400] Epoch: [0]  [11160/15468]  eta: 5:31:18  lr: 0.000018  pix_loss: 0.1719 (0.4150)  pix_loss_CNN: 0.3603 (0.7523)  time: 4.3186  data: 0.0000  max mem: 56958
+[10:18:44.676604] Epoch: [0]  [11180/15468]  eta: 5:29:44  lr: 0.000018  pix_loss: 0.1622 (0.4146)  pix_loss_CNN: 0.3488 (0.7516)  time: 4.3163  data: 0.0000  max mem: 56958
+[10:20:11.418288] Epoch: [0]  [11200/15468]  eta: 5:28:09  lr: 0.000018  pix_loss: 0.1751 (0.4142)  pix_loss_CNN: 0.3579 (0.7509)  time: 4.3370  data: 0.0000  max mem: 56958
+[10:21:37.689654] Epoch: [0]  [11220/15468]  eta: 5:26:35  lr: 0.000018  pix_loss: 0.1747 (0.4138)  pix_loss_CNN: 0.3557 (0.7502)  time: 4.3135  data: 0.0000  max mem: 56958
+[10:23:04.799536] Epoch: [0]  [11240/15468]  eta: 5:25:01  lr: 0.000018  pix_loss: 0.1808 (0.4133)  pix_loss_CNN: 0.3640 (0.7495)  time: 4.3555  data: 0.0000  max mem: 56958
+[10:24:32.164703] Epoch: [0]  [11260/15468]  eta: 5:23:27  lr: 0.000018  pix_loss: 0.1770 (0.4129)  pix_loss_CNN: 0.3647 (0.7488)  time: 4.3682  data: 0.0000  max mem: 56958
+[10:25:58.181570] Epoch: [0]  [11280/15468]  eta: 5:21:52  lr: 0.000018  pix_loss: 0.1775 (0.4125)  pix_loss_CNN: 0.3711 (0.7481)  time: 4.3008  data: 0.0000  max mem: 56958
+[10:27:23.781469] Epoch: [0]  [11300/15468]  eta: 5:20:17  lr: 0.000018  pix_loss: 0.1747 (0.4121)  pix_loss_CNN: 0.3534 (0.7474)  time: 4.2800  data: 0.0000  max mem: 56958
+[10:28:50.729121] Epoch: [0]  [11320/15468]  eta: 5:18:43  lr: 0.000018  pix_loss: 0.1731 (0.4117)  pix_loss_CNN: 0.3600 (0.7468)  time: 4.3473  data: 0.0000  max mem: 56958
+[10:30:16.837347] Epoch: [0]  [11340/15468]  eta: 5:17:09  lr: 0.000018  pix_loss: 0.1652 (0.4112)  pix_loss_CNN: 0.3513 (0.7461)  time: 4.3054  data: 0.0000  max mem: 56958
+[10:31:47.998757] Epoch: [0]  [11360/15468]  eta: 5:15:36  lr: 0.000018  pix_loss: 0.1642 (0.4108)  pix_loss_CNN: 0.3562 (0.7454)  time: 4.5580  data: 0.0000  max mem: 56958
+[10:33:17.257023] Epoch: [0]  [11380/15468]  eta: 5:14:03  lr: 0.000018  pix_loss: 0.1731 (0.4104)  pix_loss_CNN: 0.3528 (0.7447)  time: 4.4629  data: 0.0000  max mem: 56958
+[10:34:47.983257] Epoch: [0]  [11400/15468]  eta: 5:12:30  lr: 0.000018  pix_loss: 0.1746 (0.4100)  pix_loss_CNN: 0.3814 (0.7440)  time: 4.5363  data: 0.0000  max mem: 56958
+[10:36:13.409907] Epoch: [0]  [11420/15468]  eta: 5:10:56  lr: 0.000018  pix_loss: 0.1719 (0.4095)  pix_loss_CNN: 0.3529 (0.7433)  time: 4.2713  data: 0.0000  max mem: 56958
+[10:37:41.175454] Epoch: [0]  [11440/15468]  eta: 5:09:22  lr: 0.000018  pix_loss: 0.1762 (0.4092)  pix_loss_CNN: 0.3643 (0.7427)  time: 4.3882  data: 0.0000  max mem: 56958
+[10:39:04.427832] Epoch: [0]  [11460/15468]  eta: 5:07:47  lr: 0.000019  pix_loss: 0.1618 (0.4087)  pix_loss_CNN: 0.3413 (0.7420)  time: 4.1626  data: 0.0000  max mem: 56958
+[10:40:28.573120] Epoch: [0]  [11480/15468]  eta: 5:06:12  lr: 0.000019  pix_loss: 0.1656 (0.4083)  pix_loss_CNN: 0.3593 (0.7413)  time: 4.2072  data: 0.0000  max mem: 56958
+[10:41:53.363125] Epoch: [0]  [11500/15468]  eta: 5:04:37  lr: 0.000019  pix_loss: 0.1656 (0.4079)  pix_loss_CNN: 0.3445 (0.7407)  time: 4.2395  data: 0.0000  max mem: 56958
+[10:43:20.269100] Epoch: [0]  [11520/15468]  eta: 5:03:03  lr: 0.000019  pix_loss: 0.1663 (0.4075)  pix_loss_CNN: 0.3402 (0.7400)  time: 4.3453  data: 0.0000  max mem: 56958
+[10:44:47.948167] Epoch: [0]  [11540/15468]  eta: 5:01:29  lr: 0.000019  pix_loss: 0.1674 (0.4071)  pix_loss_CNN: 0.3590 (0.7393)  time: 4.3839  data: 0.0000  max mem: 56958
+[10:46:13.471463] Epoch: [0]  [11560/15468]  eta: 4:59:55  lr: 0.000019  pix_loss: 0.1640 (0.4067)  pix_loss_CNN: 0.3585 (0.7387)  time: 4.2761  data: 0.0000  max mem: 56958
+[10:47:42.274766] Epoch: [0]  [11580/15468]  eta: 4:58:22  lr: 0.000019  pix_loss: 0.1586 (0.4063)  pix_loss_CNN: 0.3444 (0.7380)  time: 4.4401  data: 0.0000  max mem: 56958
+[10:49:07.268379] Epoch: [0]  [11600/15468]  eta: 4:56:47  lr: 0.000019  pix_loss: 0.1654 (0.4058)  pix_loss_CNN: 0.3539 (0.7373)  time: 4.2496  data: 0.0000  max mem: 56958
+[10:50:35.334504] Epoch: [0]  [11620/15468]  eta: 4:55:14  lr: 0.000019  pix_loss: 0.1746 (0.4054)  pix_loss_CNN: 0.3466 (0.7367)  time: 4.4033  data: 0.0000  max mem: 56958
+[10:52:00.554153] Epoch: [0]  [11640/15468]  eta: 4:53:40  lr: 0.000019  pix_loss: 0.1658 (0.4050)  pix_loss_CNN: 0.3583 (0.7360)  time: 4.2609  data: 0.0000  max mem: 56958
+[10:53:29.720879] Epoch: [0]  [11660/15468]  eta: 4:52:07  lr: 0.000019  pix_loss: 0.1730 (0.4046)  pix_loss_CNN: 0.3566 (0.7354)  time: 4.4583  data: 0.0000  max mem: 56958
+[10:54:52.615463] Epoch: [0]  [11680/15468]  eta: 4:50:32  lr: 0.000019  pix_loss: 0.1621 (0.4042)  pix_loss_CNN: 0.3406 (0.7347)  time: 4.1447  data: 0.0000  max mem: 56958
+[10:56:22.300268] Epoch: [0]  [11700/15468]  eta: 4:48:59  lr: 0.000019  pix_loss: 0.1707 (0.4038)  pix_loss_CNN: 0.3507 (0.7340)  time: 4.4842  data: 0.0000  max mem: 56958
+[10:57:49.055098] Epoch: [0]  [11720/15468]  eta: 4:47:25  lr: 0.000019  pix_loss: 0.1681 (0.4034)  pix_loss_CNN: 0.3550 (0.7334)  time: 4.3377  data: 0.0000  max mem: 56958
+[10:59:17.935775] Epoch: [0]  [11740/15468]  eta: 4:45:52  lr: 0.000019  pix_loss: 0.1713 (0.4030)  pix_loss_CNN: 0.3535 (0.7327)  time: 4.4440  data: 0.0000  max mem: 56958
+[11:00:41.714200] Epoch: [0]  [11760/15468]  eta: 4:44:18  lr: 0.000019  pix_loss: 0.1614 (0.4026)  pix_loss_CNN: 0.3413 (0.7321)  time: 4.1889  data: 0.0000  max mem: 56958
+[11:02:05.741077] Epoch: [0]  [11780/15468]  eta: 4:42:43  lr: 0.000019  pix_loss: 0.1675 (0.4022)  pix_loss_CNN: 0.3538 (0.7314)  time: 4.2013  data: 0.0000  max mem: 56958
+[11:03:33.731805] Epoch: [0]  [11800/15468]  eta: 4:41:10  lr: 0.000019  pix_loss: 0.1699 (0.4018)  pix_loss_CNN: 0.3475 (0.7308)  time: 4.3995  data: 0.0000  max mem: 56958
+[11:04:59.756839] Epoch: [0]  [11820/15468]  eta: 4:39:36  lr: 0.000019  pix_loss: 0.1534 (0.4014)  pix_loss_CNN: 0.3333 (0.7301)  time: 4.3012  data: 0.0000  max mem: 56958
+[11:06:26.564569] Epoch: [0]  [11840/15468]  eta: 4:38:02  lr: 0.000019  pix_loss: 0.1679 (0.4010)  pix_loss_CNN: 0.3530 (0.7295)  time: 4.3403  data: 0.0000  max mem: 56958
+[11:07:54.734946] Epoch: [0]  [11860/15468]  eta: 4:36:29  lr: 0.000019  pix_loss: 0.1665 (0.4006)  pix_loss_CNN: 0.3442 (0.7288)  time: 4.4085  data: 0.0000  max mem: 56958
+[11:09:20.815456] Epoch: [0]  [11880/15468]  eta: 4:34:56  lr: 0.000019  pix_loss: 0.1575 (0.4002)  pix_loss_CNN: 0.3405 (0.7282)  time: 4.3040  data: 0.0000  max mem: 56958
+[11:10:47.924514] Epoch: [0]  [11900/15468]  eta: 4:33:22  lr: 0.000019  pix_loss: 0.1629 (0.3998)  pix_loss_CNN: 0.3556 (0.7275)  time: 4.3554  data: 0.0000  max mem: 56958
+[11:12:13.865611] Epoch: [0]  [11920/15468]  eta: 4:31:48  lr: 0.000019  pix_loss: 0.1637 (0.3994)  pix_loss_CNN: 0.3485 (0.7269)  time: 4.2970  data: 0.0000  max mem: 56958
+[11:13:39.320465] Epoch: [0]  [11940/15468]  eta: 4:30:15  lr: 0.000019  pix_loss: 0.1610 (0.3991)  pix_loss_CNN: 0.3440 (0.7263)  time: 4.2727  data: 0.0000  max mem: 56958
+[11:15:04.847507] Epoch: [0]  [11960/15468]  eta: 4:28:41  lr: 0.000019  pix_loss: 0.1741 (0.3987)  pix_loss_CNN: 0.3507 (0.7257)  time: 4.2763  data: 0.0000  max mem: 56958
+[11:16:32.953514] Epoch: [0]  [11980/15468]  eta: 4:27:08  lr: 0.000019  pix_loss: 0.1604 (0.3983)  pix_loss_CNN: 0.3355 (0.7250)  time: 4.4053  data: 0.0000  max mem: 56958
+[11:17:59.624642] Epoch: [0]  [12000/15468]  eta: 4:25:34  lr: 0.000019  pix_loss: 0.1713 (0.3979)  pix_loss_CNN: 0.3511 (0.7244)  time: 4.3335  data: 0.0000  max mem: 56958
+[11:19:27.429646] Epoch: [0]  [12020/15468]  eta: 4:24:01  lr: 0.000019  pix_loss: 0.1658 (0.3975)  pix_loss_CNN: 0.3510 (0.7238)  time: 4.3902  data: 0.0000  max mem: 56958
+[11:20:51.480690] Epoch: [0]  [12040/15468]  eta: 4:22:27  lr: 0.000019  pix_loss: 0.1632 (0.3972)  pix_loss_CNN: 0.3448 (0.7231)  time: 4.2025  data: 0.0000  max mem: 56958
+[11:22:16.950757] Epoch: [0]  [12060/15468]  eta: 4:20:53  lr: 0.000019  pix_loss: 0.1519 (0.3968)  pix_loss_CNN: 0.3316 (0.7225)  time: 4.2735  data: 0.0000  max mem: 56958
+[11:23:42.775768] Epoch: [0]  [12080/15468]  eta: 4:19:20  lr: 0.000020  pix_loss: 0.1528 (0.3964)  pix_loss_CNN: 0.3396 (0.7219)  time: 4.2912  data: 0.0000  max mem: 56958
+[11:25:11.144423] Epoch: [0]  [12100/15468]  eta: 4:17:47  lr: 0.000020  pix_loss: 0.1734 (0.3960)  pix_loss_CNN: 0.3481 (0.7213)  time: 4.4184  data: 0.0000  max mem: 56958
+[11:26:39.854006] Epoch: [0]  [12120/15468]  eta: 4:16:14  lr: 0.000020  pix_loss: 0.1612 (0.3956)  pix_loss_CNN: 0.3376 (0.7207)  time: 4.4354  data: 0.0000  max mem: 56958
+[11:28:05.940144] Epoch: [0]  [12140/15468]  eta: 4:14:41  lr: 0.000020  pix_loss: 0.1535 (0.3952)  pix_loss_CNN: 0.3284 (0.7200)  time: 4.3043  data: 0.0000  max mem: 56958
+[11:29:35.311685] Epoch: [0]  [12160/15468]  eta: 4:13:08  lr: 0.000020  pix_loss: 0.1630 (0.3948)  pix_loss_CNN: 0.3409 (0.7194)  time: 4.4685  data: 0.0000  max mem: 56958
+[11:31:02.209520] Epoch: [0]  [12180/15468]  eta: 4:11:35  lr: 0.000020  pix_loss: 0.1618 (0.3945)  pix_loss_CNN: 0.3428 (0.7188)  time: 4.3449  data: 0.0000  max mem: 56958
+[11:32:30.803491] Epoch: [0]  [12200/15468]  eta: 4:10:03  lr: 0.000020  pix_loss: 0.1711 (0.3941)  pix_loss_CNN: 0.3565 (0.7182)  time: 4.4297  data: 0.0000  max mem: 56958
+[11:33:58.320098] Epoch: [0]  [12220/15468]  eta: 4:08:30  lr: 0.000020  pix_loss: 0.1441 (0.3937)  pix_loss_CNN: 0.3272 (0.7176)  time: 4.3758  data: 0.0000  max mem: 56958
+[11:35:23.345741] Epoch: [0]  [12240/15468]  eta: 4:06:56  lr: 0.000020  pix_loss: 0.1616 (0.3933)  pix_loss_CNN: 0.3477 (0.7170)  time: 4.2512  data: 0.0000  max mem: 56958
+[11:36:50.957152] Epoch: [0]  [12260/15468]  eta: 4:05:23  lr: 0.000020  pix_loss: 0.1469 (0.3929)  pix_loss_CNN: 0.3233 (0.7163)  time: 4.3805  data: 0.0000  max mem: 56958
+[11:38:18.899046] Epoch: [0]  [12280/15468]  eta: 4:03:50  lr: 0.000020  pix_loss: 0.1537 (0.3926)  pix_loss_CNN: 0.3394 (0.7157)  time: 4.3971  data: 0.0000  max mem: 56958
+[11:39:43.266882] Epoch: [0]  [12300/15468]  eta: 4:02:17  lr: 0.000020  pix_loss: 0.1598 (0.3922)  pix_loss_CNN: 0.3462 (0.7151)  time: 4.2184  data: 0.0000  max mem: 56958
+[11:41:10.378282] Epoch: [0]  [12320/15468]  eta: 4:00:44  lr: 0.000020  pix_loss: 0.1540 (0.3918)  pix_loss_CNN: 0.3356 (0.7145)  time: 4.3555  data: 0.0000  max mem: 56958
+[11:42:37.687773] Epoch: [0]  [12340/15468]  eta: 3:59:11  lr: 0.000020  pix_loss: 0.1581 (0.3914)  pix_loss_CNN: 0.3323 (0.7139)  time: 4.3654  data: 0.0000  max mem: 56958
+[11:44:04.295714] Epoch: [0]  [12360/15468]  eta: 3:57:38  lr: 0.000020  pix_loss: 0.1772 (0.3911)  pix_loss_CNN: 0.3591 (0.7133)  time: 4.3304  data: 0.0000  max mem: 56958
+[11:45:30.205575] Epoch: [0]  [12380/15468]  eta: 3:56:04  lr: 0.000020  pix_loss: 0.1627 (0.3907)  pix_loss_CNN: 0.3486 (0.7127)  time: 4.2955  data: 0.0000  max mem: 56958
+[11:46:57.407876] Epoch: [0]  [12400/15468]  eta: 3:54:32  lr: 0.000020  pix_loss: 0.1583 (0.3904)  pix_loss_CNN: 0.3438 (0.7121)  time: 4.3601  data: 0.0000  max mem: 56958
+[11:48:23.528368] Epoch: [0]  [12420/15468]  eta: 3:52:59  lr: 0.000020  pix_loss: 0.1593 (0.3900)  pix_loss_CNN: 0.3353 (0.7115)  time: 4.3060  data: 0.0000  max mem: 56958
+[11:49:50.719208] Epoch: [0]  [12440/15468]  eta: 3:51:26  lr: 0.000020  pix_loss: 0.1580 (0.3896)  pix_loss_CNN: 0.3410 (0.7109)  time: 4.3594  data: 0.0000  max mem: 56958
+[11:51:17.321895] Epoch: [0]  [12460/15468]  eta: 3:49:53  lr: 0.000020  pix_loss: 0.1611 (0.3893)  pix_loss_CNN: 0.3365 (0.7103)  time: 4.3301  data: 0.0000  max mem: 56958
+[11:52:41.436195] Epoch: [0]  [12480/15468]  eta: 3:48:19  lr: 0.000020  pix_loss: 0.1535 (0.3889)  pix_loss_CNN: 0.3310 (0.7097)  time: 4.2057  data: 0.0000  max mem: 56958
+[11:54:08.994302] Epoch: [0]  [12500/15468]  eta: 3:46:47  lr: 0.000020  pix_loss: 0.1436 (0.3885)  pix_loss_CNN: 0.3249 (0.7091)  time: 4.3779  data: 0.0000  max mem: 56958
+[11:55:36.701173] Epoch: [0]  [12520/15468]  eta: 3:45:14  lr: 0.000020  pix_loss: 0.1483 (0.3881)  pix_loss_CNN: 0.3187 (0.7085)  time: 4.3853  data: 0.0000  max mem: 56958
+[11:57:01.120083] Epoch: [0]  [12540/15468]  eta: 3:43:41  lr: 0.000020  pix_loss: 0.1585 (0.3878)  pix_loss_CNN: 0.3277 (0.7079)  time: 4.2209  data: 0.0000  max mem: 56958
+[11:58:26.789528] Epoch: [0]  [12560/15468]  eta: 3:42:07  lr: 0.000020  pix_loss: 0.1604 (0.3874)  pix_loss_CNN: 0.3370 (0.7073)  time: 4.2834  data: 0.0000  max mem: 56958
+[11:59:53.292787] Epoch: [0]  [12580/15468]  eta: 3:40:35  lr: 0.000020  pix_loss: 0.1416 (0.3870)  pix_loss_CNN: 0.3200 (0.7067)  time: 4.3251  data: 0.0000  max mem: 56958
+[12:01:21.012374] Epoch: [0]  [12600/15468]  eta: 3:39:02  lr: 0.000020  pix_loss: 0.1467 (0.3866)  pix_loss_CNN: 0.3079 (0.7061)  time: 4.3859  data: 0.0000  max mem: 56958
+[12:02:46.674225] Epoch: [0]  [12620/15468]  eta: 3:37:29  lr: 0.000020  pix_loss: 0.1574 (0.3863)  pix_loss_CNN: 0.3286 (0.7055)  time: 4.2831  data: 0.0000  max mem: 56958
+[12:04:15.761519] Epoch: [0]  [12640/15468]  eta: 3:35:57  lr: 0.000020  pix_loss: 0.1510 (0.3859)  pix_loss_CNN: 0.3237 (0.7049)  time: 4.4543  data: 0.0000  max mem: 56958
+[12:05:48.655827] Epoch: [0]  [12660/15468]  eta: 3:34:25  lr: 0.000020  pix_loss: 0.1532 (0.3855)  pix_loss_CNN: 0.3314 (0.7043)  time: 4.6447  data: 0.0000  max mem: 56958
+[12:07:15.043561] Epoch: [0]  [12680/15468]  eta: 3:32:53  lr: 0.000020  pix_loss: 0.1608 (0.3852)  pix_loss_CNN: 0.3365 (0.7037)  time: 4.3193  data: 0.0000  max mem: 56958
+[12:08:39.155715] Epoch: [0]  [12700/15468]  eta: 3:31:19  lr: 0.000021  pix_loss: 0.1480 (0.3848)  pix_loss_CNN: 0.3325 (0.7032)  time: 4.2056  data: 0.0000  max mem: 56958
+[12:10:05.336729] Epoch: [0]  [12720/15468]  eta: 3:29:47  lr: 0.000021  pix_loss: 0.1636 (0.3845)  pix_loss_CNN: 0.3470 (0.7026)  time: 4.3090  data: 0.0000  max mem: 56958
+[12:11:30.957911] Epoch: [0]  [12740/15468]  eta: 3:28:14  lr: 0.000021  pix_loss: 0.1547 (0.3841)  pix_loss_CNN: 0.3373 (0.7020)  time: 4.2810  data: 0.0000  max mem: 56958
+[12:12:56.823800] Epoch: [0]  [12760/15468]  eta: 3:26:41  lr: 0.000021  pix_loss: 0.1605 (0.3838)  pix_loss_CNN: 0.3364 (0.7014)  time: 4.2933  data: 0.0000  max mem: 56958
+[12:14:22.850612] Epoch: [0]  [12780/15468]  eta: 3:25:08  lr: 0.000021  pix_loss: 0.1522 (0.3834)  pix_loss_CNN: 0.3297 (0.7009)  time: 4.3013  data: 0.0000  max mem: 56958
+[12:15:48.619018] Epoch: [0]  [12800/15468]  eta: 3:23:35  lr: 0.000021  pix_loss: 0.1550 (0.3831)  pix_loss_CNN: 0.3384 (0.7003)  time: 4.2884  data: 0.0000  max mem: 56958
+[12:17:15.121111] Epoch: [0]  [12820/15468]  eta: 3:22:03  lr: 0.000021  pix_loss: 0.1453 (0.3827)  pix_loss_CNN: 0.3091 (0.6997)  time: 4.3251  data: 0.0000  max mem: 56958
+[12:18:43.739825] Epoch: [0]  [12840/15468]  eta: 3:20:31  lr: 0.000021  pix_loss: 0.1617 (0.3823)  pix_loss_CNN: 0.3345 (0.6991)  time: 4.4309  data: 0.0000  max mem: 56958
+[12:20:10.305066] Epoch: [0]  [12860/15468]  eta: 3:18:58  lr: 0.000021  pix_loss: 0.1673 (0.3820)  pix_loss_CNN: 0.3476 (0.6986)  time: 4.3282  data: 0.0000  max mem: 56958
+[12:21:36.906239] Epoch: [0]  [12880/15468]  eta: 3:17:25  lr: 0.000021  pix_loss: 0.1587 (0.3817)  pix_loss_CNN: 0.3326 (0.6980)  time: 4.3300  data: 0.0000  max mem: 56958
+[12:23:07.414681] Epoch: [0]  [12900/15468]  eta: 3:15:54  lr: 0.000021  pix_loss: 0.1543 (0.3813)  pix_loss_CNN: 0.3267 (0.6974)  time: 4.5254  data: 0.0000  max mem: 56958
+[12:24:34.345031] Epoch: [0]  [12920/15468]  eta: 3:14:21  lr: 0.000021  pix_loss: 0.1456 (0.3809)  pix_loss_CNN: 0.3256 (0.6968)  time: 4.3465  data: 0.0000  max mem: 56958
+[12:26:03.144847] Epoch: [0]  [12940/15468]  eta: 3:12:49  lr: 0.000021  pix_loss: 0.1414 (0.3806)  pix_loss_CNN: 0.3268 (0.6963)  time: 4.4400  data: 0.0000  max mem: 56958
+[12:27:35.665602] Epoch: [0]  [12960/15468]  eta: 3:11:18  lr: 0.000021  pix_loss: 0.1438 (0.3802)  pix_loss_CNN: 0.3108 (0.6957)  time: 4.6260  data: 0.0000  max mem: 56958
+[12:29:04.114437] Epoch: [0]  [12980/15468]  eta: 3:09:46  lr: 0.000021  pix_loss: 0.1528 (0.3799)  pix_loss_CNN: 0.3376 (0.6951)  time: 4.4224  data: 0.0000  max mem: 56958
+[12:30:34.179784] Epoch: [0]  [13000/15468]  eta: 3:08:14  lr: 0.000021  pix_loss: 0.1561 (0.3795)  pix_loss_CNN: 0.3242 (0.6946)  time: 4.5032  data: 0.0000  max mem: 56958
+[12:32:02.144724] Epoch: [0]  [13020/15468]  eta: 3:06:42  lr: 0.000021  pix_loss: 0.1567 (0.3792)  pix_loss_CNN: 0.3262 (0.6940)  time: 4.3982  data: 0.0000  max mem: 56958
+[12:33:31.124407] Epoch: [0]  [13040/15468]  eta: 3:05:10  lr: 0.000021  pix_loss: 0.1528 (0.3788)  pix_loss_CNN: 0.3378 (0.6934)  time: 4.4489  data: 0.0000  max mem: 56958
+[12:35:00.073752] Epoch: [0]  [13060/15468]  eta: 3:03:38  lr: 0.000021  pix_loss: 0.1397 (0.3785)  pix_loss_CNN: 0.3099 (0.6929)  time: 4.4474  data: 0.0000  max mem: 56958
+[12:36:29.483970] Epoch: [0]  [13080/15468]  eta: 3:02:06  lr: 0.000021  pix_loss: 0.1462 (0.3781)  pix_loss_CNN: 0.3107 (0.6923)  time: 4.4705  data: 0.0000  max mem: 56958
+[12:37:59.496970] Epoch: [0]  [13100/15468]  eta: 3:00:34  lr: 0.000021  pix_loss: 0.1478 (0.3778)  pix_loss_CNN: 0.3231 (0.6917)  time: 4.5006  data: 0.0000  max mem: 56958
+[12:39:32.402654] Epoch: [0]  [13120/15468]  eta: 2:59:03  lr: 0.000021  pix_loss: 0.1519 (0.3774)  pix_loss_CNN: 0.3191 (0.6912)  time: 4.6452  data: 0.0000  max mem: 56958
+[12:41:00.130555] Epoch: [0]  [13140/15468]  eta: 2:57:31  lr: 0.000021  pix_loss: 0.1426 (0.3771)  pix_loss_CNN: 0.3179 (0.6906)  time: 4.3864  data: 0.0000  max mem: 56958
+[12:42:30.156277] Epoch: [0]  [13160/15468]  eta: 2:55:59  lr: 0.000021  pix_loss: 0.1527 (0.3768)  pix_loss_CNN: 0.3253 (0.6901)  time: 4.5012  data: 0.0000  max mem: 56958
+[12:43:58.371456] Epoch: [0]  [13180/15468]  eta: 2:54:27  lr: 0.000021  pix_loss: 0.1475 (0.3764)  pix_loss_CNN: 0.3222 (0.6895)  time: 4.4107  data: 0.0000  max mem: 56958
+[12:45:24.999209] Epoch: [0]  [13200/15468]  eta: 2:52:54  lr: 0.000021  pix_loss: 0.1592 (0.3761)  pix_loss_CNN: 0.3344 (0.6890)  time: 4.3313  data: 0.0000  max mem: 56958
+[12:46:55.402803] Epoch: [0]  [13220/15468]  eta: 2:51:23  lr: 0.000021  pix_loss: 0.1526 (0.3757)  pix_loss_CNN: 0.3264 (0.6884)  time: 4.5201  data: 0.0000  max mem: 56958
+[12:48:27.825329] Epoch: [0]  [13240/15468]  eta: 2:49:51  lr: 0.000021  pix_loss: 0.1566 (0.3754)  pix_loss_CNN: 0.3382 (0.6879)  time: 4.6211  data: 0.0000  max mem: 56958
+[12:49:54.988669] Epoch: [0]  [13260/15468]  eta: 2:48:19  lr: 0.000021  pix_loss: 0.1514 (0.3751)  pix_loss_CNN: 0.3273 (0.6874)  time: 4.3581  data: 0.0000  max mem: 56958
+[12:51:25.065250] Epoch: [0]  [13280/15468]  eta: 2:46:47  lr: 0.000021  pix_loss: 0.1467 (0.3747)  pix_loss_CNN: 0.3270 (0.6868)  time: 4.5038  data: 0.0000  max mem: 56958
+[12:52:57.870733] Epoch: [0]  [13300/15468]  eta: 2:45:16  lr: 0.000021  pix_loss: 0.1558 (0.3744)  pix_loss_CNN: 0.3248 (0.6863)  time: 4.6402  data: 0.0000  max mem: 56958
+[12:54:25.175372] Epoch: [0]  [13320/15468]  eta: 2:43:44  lr: 0.000022  pix_loss: 0.1527 (0.3741)  pix_loss_CNN: 0.3174 (0.6857)  time: 4.3652  data: 0.0000  max mem: 56958
+[12:55:54.803385] Epoch: [0]  [13340/15468]  eta: 2:42:12  lr: 0.000022  pix_loss: 0.1546 (0.3737)  pix_loss_CNN: 0.3344 (0.6852)  time: 4.4814  data: 0.0000  max mem: 56958
+[12:57:23.921083] Epoch: [0]  [13360/15468]  eta: 2:40:40  lr: 0.000022  pix_loss: 0.1389 (0.3734)  pix_loss_CNN: 0.3134 (0.6846)  time: 4.4558  data: 0.0000  max mem: 56958
+[12:58:54.043041] Epoch: [0]  [13380/15468]  eta: 2:39:09  lr: 0.000022  pix_loss: 0.1442 (0.3730)  pix_loss_CNN: 0.3120 (0.6841)  time: 4.5061  data: 0.0000  max mem: 56958
+[13:00:21.472943] Epoch: [0]  [13400/15468]  eta: 2:37:37  lr: 0.000022  pix_loss: 0.1537 (0.3727)  pix_loss_CNN: 0.3152 (0.6836)  time: 4.3715  data: 0.0000  max mem: 56958
+[13:01:51.697502] Epoch: [0]  [13420/15468]  eta: 2:36:05  lr: 0.000022  pix_loss: 0.1441 (0.3724)  pix_loss_CNN: 0.3174 (0.6830)  time: 4.5112  data: 0.0000  max mem: 56958
+[13:03:23.035299] Epoch: [0]  [13440/15468]  eta: 2:34:34  lr: 0.000022  pix_loss: 0.1398 (0.3720)  pix_loss_CNN: 0.3175 (0.6825)  time: 4.5668  data: 0.0000  max mem: 56958
+[13:04:54.529958] Epoch: [0]  [13460/15468]  eta: 2:33:02  lr: 0.000022  pix_loss: 0.1450 (0.3717)  pix_loss_CNN: 0.3168 (0.6819)  time: 4.5747  data: 0.0000  max mem: 56958
+[13:06:21.950266] Epoch: [0]  [13480/15468]  eta: 2:31:30  lr: 0.000022  pix_loss: 0.1529 (0.3714)  pix_loss_CNN: 0.3205 (0.6814)  time: 4.3710  data: 0.0000  max mem: 56958
+[13:07:51.618204] Epoch: [0]  [13500/15468]  eta: 2:29:58  lr: 0.000022  pix_loss: 0.1342 (0.3710)  pix_loss_CNN: 0.3104 (0.6809)  time: 4.4833  data: 0.0000  max mem: 56958
+[13:09:19.265362] Epoch: [0]  [13520/15468]  eta: 2:28:26  lr: 0.000022  pix_loss: 0.1418 (0.3707)  pix_loss_CNN: 0.3100 (0.6803)  time: 4.3823  data: 0.0000  max mem: 56958
+[13:10:49.808041] Epoch: [0]  [13540/15468]  eta: 2:26:55  lr: 0.000022  pix_loss: 0.1425 (0.3704)  pix_loss_CNN: 0.3145 (0.6798)  time: 4.5271  data: 0.0000  max mem: 56958
+[13:12:22.140273] Epoch: [0]  [13560/15468]  eta: 2:25:23  lr: 0.000022  pix_loss: 0.1347 (0.3700)  pix_loss_CNN: 0.2960 (0.6792)  time: 4.6166  data: 0.0000  max mem: 56958
+[13:13:52.088157] Epoch: [0]  [13580/15468]  eta: 2:23:52  lr: 0.000022  pix_loss: 0.1461 (0.3697)  pix_loss_CNN: 0.3192 (0.6787)  time: 4.4973  data: 0.0000  max mem: 56958
+[13:15:20.019598] Epoch: [0]  [13600/15468]  eta: 2:22:20  lr: 0.000022  pix_loss: 0.1455 (0.3694)  pix_loss_CNN: 0.3311 (0.6782)  time: 4.3965  data: 0.0000  max mem: 56958
+[13:16:51.113611] Epoch: [0]  [13620/15468]  eta: 2:20:48  lr: 0.000022  pix_loss: 0.1422 (0.3690)  pix_loss_CNN: 0.3111 (0.6776)  time: 4.5547  data: 0.0000  max mem: 56958
+[13:18:20.873857] Epoch: [0]  [13640/15468]  eta: 2:19:17  lr: 0.000022  pix_loss: 0.1452 (0.3687)  pix_loss_CNN: 0.3195 (0.6771)  time: 4.4880  data: 0.0000  max mem: 56958
+[13:19:51.680439] Epoch: [0]  [13660/15468]  eta: 2:17:45  lr: 0.000022  pix_loss: 0.1317 (0.3684)  pix_loss_CNN: 0.2904 (0.6765)  time: 4.5403  data: 0.0000  max mem: 56958
+[13:21:20.098870] Epoch: [0]  [13680/15468]  eta: 2:16:13  lr: 0.000022  pix_loss: 0.1410 (0.3681)  pix_loss_CNN: 0.3117 (0.6760)  time: 4.4209  data: 0.0000  max mem: 56958
+[13:22:53.091627] Epoch: [0]  [13700/15468]  eta: 2:14:42  lr: 0.000022  pix_loss: 0.1386 (0.3677)  pix_loss_CNN: 0.3242 (0.6755)  time: 4.6496  data: 0.0000  max mem: 56958
+[13:24:24.303272] Epoch: [0]  [13720/15468]  eta: 2:13:11  lr: 0.000022  pix_loss: 0.1504 (0.3674)  pix_loss_CNN: 0.3198 (0.6750)  time: 4.5605  data: 0.0000  max mem: 56958
+[13:25:53.183175] Epoch: [0]  [13740/15468]  eta: 2:11:39  lr: 0.000022  pix_loss: 0.1442 (0.3671)  pix_loss_CNN: 0.3197 (0.6745)  time: 4.4440  data: 0.0000  max mem: 56958
+[13:27:20.165412] Epoch: [0]  [13760/15468]  eta: 2:10:07  lr: 0.000022  pix_loss: 0.1291 (0.3668)  pix_loss_CNN: 0.3027 (0.6739)  time: 4.3491  data: 0.0000  max mem: 56958
+[13:28:51.636026] Epoch: [0]  [13780/15468]  eta: 2:08:36  lr: 0.000022  pix_loss: 0.1397 (0.3664)  pix_loss_CNN: 0.3078 (0.6734)  time: 4.5735  data: 0.0000  max mem: 56958
+[13:30:22.385213] Epoch: [0]  [13800/15468]  eta: 2:07:04  lr: 0.000022  pix_loss: 0.1351 (0.3661)  pix_loss_CNN: 0.2962 (0.6729)  time: 4.5374  data: 0.0000  max mem: 56958
+[13:31:56.471707] Epoch: [0]  [13820/15468]  eta: 2:05:33  lr: 0.000022  pix_loss: 0.1368 (0.3658)  pix_loss_CNN: 0.3044 (0.6724)  time: 4.7043  data: 0.0000  max mem: 56958
+[13:33:24.286355] Epoch: [0]  [13840/15468]  eta: 2:04:01  lr: 0.000022  pix_loss: 0.1524 (0.3655)  pix_loss_CNN: 0.3224 (0.6718)  time: 4.3907  data: 0.0000  max mem: 56958
+[13:34:51.173021] Epoch: [0]  [13860/15468]  eta: 2:02:29  lr: 0.000022  pix_loss: 0.1352 (0.3652)  pix_loss_CNN: 0.2984 (0.6713)  time: 4.3443  data: 0.0000  max mem: 56958
+[13:36:21.809819] Epoch: [0]  [13880/15468]  eta: 2:00:58  lr: 0.000022  pix_loss: 0.1413 (0.3648)  pix_loss_CNN: 0.2993 (0.6708)  time: 4.5318  data: 0.0000  max mem: 56958
+[13:37:49.838832] Epoch: [0]  [13900/15468]  eta: 1:59:26  lr: 0.000022  pix_loss: 0.1401 (0.3645)  pix_loss_CNN: 0.3144 (0.6703)  time: 4.4014  data: 0.0000  max mem: 56958
+[13:39:18.997719] Epoch: [0]  [13920/15468]  eta: 1:57:54  lr: 0.000022  pix_loss: 0.1507 (0.3642)  pix_loss_CNN: 0.3106 (0.6698)  time: 4.4579  data: 0.0000  max mem: 56958
+[13:40:49.131615] Epoch: [0]  [13940/15468]  eta: 1:56:23  lr: 0.000023  pix_loss: 0.1459 (0.3639)  pix_loss_CNN: 0.3088 (0.6693)  time: 4.5067  data: 0.0000  max mem: 56958
+[13:42:17.603101] Epoch: [0]  [13960/15468]  eta: 1:54:51  lr: 0.000023  pix_loss: 0.1344 (0.3636)  pix_loss_CNN: 0.3149 (0.6687)  time: 4.4235  data: 0.0000  max mem: 56958
+[13:43:45.481875] Epoch: [0]  [13980/15468]  eta: 1:53:19  lr: 0.000023  pix_loss: 0.1394 (0.3632)  pix_loss_CNN: 0.3149 (0.6682)  time: 4.3939  data: 0.0000  max mem: 56958
+[13:45:16.432282] Epoch: [0]  [14000/15468]  eta: 1:51:48  lr: 0.000023  pix_loss: 0.1362 (0.3629)  pix_loss_CNN: 0.3012 (0.6677)  time: 4.5475  data: 0.0000  max mem: 56958
+[13:46:47.999628] Epoch: [0]  [14020/15468]  eta: 1:50:16  lr: 0.000023  pix_loss: 0.1366 (0.3626)  pix_loss_CNN: 0.3200 (0.6672)  time: 4.5783  data: 0.0000  max mem: 56958
+[13:48:16.547980] Epoch: [0]  [14040/15468]  eta: 1:48:45  lr: 0.000023  pix_loss: 0.1406 (0.3623)  pix_loss_CNN: 0.3107 (0.6667)  time: 4.4274  data: 0.0000  max mem: 56958
+[13:49:43.800360] Epoch: [0]  [14060/15468]  eta: 1:47:13  lr: 0.000023  pix_loss: 0.1424 (0.3620)  pix_loss_CNN: 0.3043 (0.6662)  time: 4.3626  data: 0.0000  max mem: 56958
+[13:51:25.749275] Epoch: [0]  [14080/15468]  eta: 1:45:42  lr: 0.000023  pix_loss: 0.1372 (0.3617)  pix_loss_CNN: 0.3087 (0.6657)  time: 5.0974  data: 0.0000  max mem: 56958
+[13:52:57.479577] Epoch: [0]  [14100/15468]  eta: 1:44:11  lr: 0.000023  pix_loss: 0.1557 (0.3614)  pix_loss_CNN: 0.3260 (0.6652)  time: 4.5865  data: 0.0000  max mem: 56958
+[13:54:29.849451] Epoch: [0]  [14120/15468]  eta: 1:42:40  lr: 0.000023  pix_loss: 0.1317 (0.3611)  pix_loss_CNN: 0.2926 (0.6647)  time: 4.6185  data: 0.0000  max mem: 56958
+[13:56:01.920130] Epoch: [0]  [14140/15468]  eta: 1:41:08  lr: 0.000023  pix_loss: 0.1401 (0.3608)  pix_loss_CNN: 0.3085 (0.6642)  time: 4.6035  data: 0.0000  max mem: 56958
+[13:57:30.940269] Epoch: [0]  [14160/15468]  eta: 1:39:37  lr: 0.000023  pix_loss: 0.1530 (0.3605)  pix_loss_CNN: 0.3129 (0.6637)  time: 4.4510  data: 0.0000  max mem: 56958
+[13:58:57.402268] Epoch: [0]  [14180/15468]  eta: 1:38:05  lr: 0.000023  pix_loss: 0.1457 (0.3602)  pix_loss_CNN: 0.3188 (0.6632)  time: 4.3231  data: 0.0000  max mem: 56958
+[14:00:24.764781] Epoch: [0]  [14200/15468]  eta: 1:36:33  lr: 0.000023  pix_loss: 0.1383 (0.3599)  pix_loss_CNN: 0.2979 (0.6628)  time: 4.3681  data: 0.0000  max mem: 56958
+[14:01:54.598272] Epoch: [0]  [14220/15468]  eta: 1:35:02  lr: 0.000023  pix_loss: 0.1410 (0.3595)  pix_loss_CNN: 0.3116 (0.6623)  time: 4.4916  data: 0.0000  max mem: 56958
+[14:03:26.864377] Epoch: [0]  [14240/15468]  eta: 1:33:30  lr: 0.000023  pix_loss: 0.1391 (0.3592)  pix_loss_CNN: 0.3063 (0.6618)  time: 4.6133  data: 0.0000  max mem: 56958
+[14:04:53.892126] Epoch: [0]  [14260/15468]  eta: 1:31:59  lr: 0.000023  pix_loss: 0.1423 (0.3589)  pix_loss_CNN: 0.3123 (0.6613)  time: 4.3513  data: 0.0000  max mem: 56958
+[14:06:21.676130] Epoch: [0]  [14280/15468]  eta: 1:30:27  lr: 0.000023  pix_loss: 0.1417 (0.3586)  pix_loss_CNN: 0.3068 (0.6608)  time: 4.3892  data: 0.0000  max mem: 56958
+[14:07:51.103688] Epoch: [0]  [14300/15468]  eta: 1:28:55  lr: 0.000023  pix_loss: 0.1352 (0.3583)  pix_loss_CNN: 0.3011 (0.6603)  time: 4.4713  data: 0.0000  max mem: 56958
+[14:09:21.104403] Epoch: [0]  [14320/15468]  eta: 1:27:24  lr: 0.000023  pix_loss: 0.1404 (0.3580)  pix_loss_CNN: 0.3190 (0.6598)  time: 4.5000  data: 0.0000  max mem: 56958
+[14:10:49.958711] Epoch: [0]  [14340/15468]  eta: 1:25:52  lr: 0.000023  pix_loss: 0.1341 (0.3577)  pix_loss_CNN: 0.2940 (0.6593)  time: 4.4427  data: 0.0000  max mem: 56958
+[14:12:19.347818] Epoch: [0]  [14360/15468]  eta: 1:24:21  lr: 0.000023  pix_loss: 0.1490 (0.3574)  pix_loss_CNN: 0.3148 (0.6588)  time: 4.4694  data: 0.0000  max mem: 56958
+[14:13:48.843364] Epoch: [0]  [14380/15468]  eta: 1:22:49  lr: 0.000023  pix_loss: 0.1439 (0.3571)  pix_loss_CNN: 0.3130 (0.6583)  time: 4.4747  data: 0.0000  max mem: 56958
+[14:15:20.473594] Epoch: [0]  [14400/15468]  eta: 1:21:18  lr: 0.000023  pix_loss: 0.1376 (0.3568)  pix_loss_CNN: 0.3047 (0.6579)  time: 4.5815  data: 0.0000  max mem: 56958
+[14:16:47.420396] Epoch: [0]  [14420/15468]  eta: 1:19:46  lr: 0.000023  pix_loss: 0.1456 (0.3565)  pix_loss_CNN: 0.3144 (0.6574)  time: 4.3473  data: 0.0000  max mem: 56958
+[14:18:18.790877] Epoch: [0]  [14440/15468]  eta: 1:18:15  lr: 0.000023  pix_loss: 0.1408 (0.3562)  pix_loss_CNN: 0.3085 (0.6569)  time: 4.5685  data: 0.0000  max mem: 56958
+[14:19:47.630997] Epoch: [0]  [14460/15468]  eta: 1:16:44  lr: 0.000023  pix_loss: 0.1333 (0.3559)  pix_loss_CNN: 0.2986 (0.6564)  time: 4.4420  data: 0.0000  max mem: 56958
+[14:21:16.463898] Epoch: [0]  [14480/15468]  eta: 1:15:12  lr: 0.000023  pix_loss: 0.1344 (0.3556)  pix_loss_CNN: 0.3103 (0.6559)  time: 4.4416  data: 0.0000  max mem: 56958
+[14:22:34.248439] Epoch: [0]  [14500/15468]  eta: 1:13:40  lr: 0.000023  pix_loss: 0.1439 (0.3553)  pix_loss_CNN: 0.3068 (0.6555)  time: 3.8892  data: 0.0000  max mem: 56958
+[14:24:00.864434] Epoch: [0]  [14520/15468]  eta: 1:12:08  lr: 0.000023  pix_loss: 0.1340 (0.3550)  pix_loss_CNN: 0.2990 (0.6550)  time: 4.3308  data: 0.0000  max mem: 56958
+[14:25:26.993369] Epoch: [0]  [14540/15468]  eta: 1:10:36  lr: 0.000024  pix_loss: 0.1277 (0.3547)  pix_loss_CNN: 0.2952 (0.6545)  time: 4.3064  data: 0.0000  max mem: 56958
+[14:26:54.837269] Epoch: [0]  [14560/15468]  eta: 1:09:05  lr: 0.000024  pix_loss: 0.1325 (0.3544)  pix_loss_CNN: 0.3017 (0.6540)  time: 4.3922  data: 0.0000  max mem: 56958
+[14:28:25.594682] Epoch: [0]  [14580/15468]  eta: 1:07:34  lr: 0.000024  pix_loss: 0.1283 (0.3541)  pix_loss_CNN: 0.2924 (0.6535)  time: 4.5378  data: 0.0000  max mem: 56958
+[14:29:55.399200] Epoch: [0]  [14600/15468]  eta: 1:06:02  lr: 0.000024  pix_loss: 0.1361 (0.3538)  pix_loss_CNN: 0.3061 (0.6531)  time: 4.4902  data: 0.0000  max mem: 56958
+[14:31:24.729293] Epoch: [0]  [14620/15468]  eta: 1:04:31  lr: 0.000024  pix_loss: 0.1345 (0.3536)  pix_loss_CNN: 0.3088 (0.6526)  time: 4.4665  data: 0.0000  max mem: 56958
+[14:32:52.355511] Epoch: [0]  [14640/15468]  eta: 1:02:59  lr: 0.000024  pix_loss: 0.1369 (0.3533)  pix_loss_CNN: 0.3033 (0.6521)  time: 4.3813  data: 0.0000  max mem: 56958
+[14:34:23.285072] Epoch: [0]  [14660/15468]  eta: 1:01:28  lr: 0.000024  pix_loss: 0.1281 (0.3530)  pix_loss_CNN: 0.2971 (0.6516)  time: 4.5464  data: 0.0000  max mem: 56958
+[14:35:49.353801] Epoch: [0]  [14680/15468]  eta: 0:59:56  lr: 0.000024  pix_loss: 0.1361 (0.3527)  pix_loss_CNN: 0.2963 (0.6512)  time: 4.3034  data: 0.0000  max mem: 56958
+[14:37:17.222607] Epoch: [0]  [14700/15468]  eta: 0:58:25  lr: 0.000024  pix_loss: 0.1374 (0.3524)  pix_loss_CNN: 0.3039 (0.6507)  time: 4.3934  data: 0.0000  max mem: 56958
+[14:38:45.600266] Epoch: [0]  [14720/15468]  eta: 0:56:53  lr: 0.000024  pix_loss: 0.1422 (0.3521)  pix_loss_CNN: 0.3050 (0.6502)  time: 4.4188  data: 0.0000  max mem: 56958
+[14:40:13.922097] Epoch: [0]  [14740/15468]  eta: 0:55:22  lr: 0.000024  pix_loss: 0.1377 (0.3518)  pix_loss_CNN: 0.3002 (0.6497)  time: 4.4160  data: 0.0000  max mem: 56958
+[14:41:42.997804] Epoch: [0]  [14760/15468]  eta: 0:53:51  lr: 0.000024  pix_loss: 0.1396 (0.3515)  pix_loss_CNN: 0.3126 (0.6493)  time: 4.4537  data: 0.0000  max mem: 56958
+[14:43:11.876495] Epoch: [0]  [14780/15468]  eta: 0:52:19  lr: 0.000024  pix_loss: 0.1244 (0.3512)  pix_loss_CNN: 0.2951 (0.6488)  time: 4.4439  data: 0.0000  max mem: 56958
+[14:44:44.781493] Epoch: [0]  [14800/15468]  eta: 0:50:48  lr: 0.000024  pix_loss: 0.1330 (0.3509)  pix_loss_CNN: 0.3053 (0.6483)  time: 4.6452  data: 0.0000  max mem: 56958
+[14:46:13.146872] Epoch: [0]  [14820/15468]  eta: 0:49:17  lr: 0.000024  pix_loss: 0.1358 (0.3506)  pix_loss_CNN: 0.3063 (0.6479)  time: 4.4182  data: 0.0000  max mem: 56958
+[14:47:41.787834] Epoch: [0]  [14840/15468]  eta: 0:47:45  lr: 0.000024  pix_loss: 0.1405 (0.3504)  pix_loss_CNN: 0.3039 (0.6474)  time: 4.4320  data: 0.0000  max mem: 56958
+[14:49:14.723193] Epoch: [0]  [14860/15468]  eta: 0:46:14  lr: 0.000024  pix_loss: 0.1400 (0.3501)  pix_loss_CNN: 0.2998 (0.6469)  time: 4.6467  data: 0.0000  max mem: 56958
+[14:50:43.760065] Epoch: [0]  [14880/15468]  eta: 0:44:43  lr: 0.000024  pix_loss: 0.1406 (0.3498)  pix_loss_CNN: 0.3055 (0.6465)  time: 4.4518  data: 0.0000  max mem: 56958
+[14:52:18.904898] Epoch: [0]  [14900/15468]  eta: 0:43:12  lr: 0.000024  pix_loss: 0.1403 (0.3495)  pix_loss_CNN: 0.3040 (0.6460)  time: 4.7572  data: 0.0000  max mem: 56958
+[14:53:43.425140] Epoch: [0]  [14920/15468]  eta: 0:41:40  lr: 0.000024  pix_loss: 0.1329 (0.3492)  pix_loss_CNN: 0.2947 (0.6456)  time: 4.2260  data: 0.0000  max mem: 56958
+[14:55:11.863484] Epoch: [0]  [14940/15468]  eta: 0:40:09  lr: 0.000024  pix_loss: 0.1280 (0.3489)  pix_loss_CNN: 0.3001 (0.6451)  time: 4.4219  data: 0.0000  max mem: 56958
+[14:56:40.058642] Epoch: [0]  [14960/15468]  eta: 0:38:37  lr: 0.000024  pix_loss: 0.1177 (0.3486)  pix_loss_CNN: 0.2804 (0.6446)  time: 4.4097  data: 0.0000  max mem: 56958
+[14:58:11.954509] Epoch: [0]  [14980/15468]  eta: 0:37:06  lr: 0.000024  pix_loss: 0.1352 (0.3483)  pix_loss_CNN: 0.3086 (0.6441)  time: 4.5947  data: 0.0000  max mem: 56958
+[14:59:41.824573] Epoch: [0]  [15000/15468]  eta: 0:35:35  lr: 0.000024  pix_loss: 0.1278 (0.3481)  pix_loss_CNN: 0.2999 (0.6437)  time: 4.4935  data: 0.0000  max mem: 56958
+[15:01:18.490638] Epoch: [0]  [15020/15468]  eta: 0:34:04  lr: 0.000024  pix_loss: 0.1272 (0.3478)  pix_loss_CNN: 0.2902 (0.6432)  time: 4.8333  data: 0.0000  max mem: 56958
+[15:02:58.541860] Epoch: [0]  [15040/15468]  eta: 0:32:33  lr: 0.000024  pix_loss: 0.1275 (0.3475)  pix_loss_CNN: 0.2850 (0.6428)  time: 5.0025  data: 0.0000  max mem: 56958
+[15:04:36.037850] Epoch: [0]  [15060/15468]  eta: 0:31:02  lr: 0.000024  pix_loss: 0.1223 (0.3472)  pix_loss_CNN: 0.2768 (0.6423)  time: 4.8748  data: 0.0000  max mem: 56958
+[15:06:17.710762] Epoch: [0]  [15080/15468]  eta: 0:29:31  lr: 0.000024  pix_loss: 0.1401 (0.3469)  pix_loss_CNN: 0.3072 (0.6418)  time: 5.0836  data: 0.0000  max mem: 56958
+[15:07:53.813233] Epoch: [0]  [15100/15468]  eta: 0:27:59  lr: 0.000024  pix_loss: 0.1335 (0.3466)  pix_loss_CNN: 0.2956 (0.6414)  time: 4.8051  data: 0.0000  max mem: 56958
+[15:09:30.968786] Epoch: [0]  [15120/15468]  eta: 0:26:28  lr: 0.000024  pix_loss: 0.1213 (0.3463)  pix_loss_CNN: 0.2685 (0.6409)  time: 4.8577  data: 0.0000  max mem: 56958
+[15:11:06.759495] Epoch: [0]  [15140/15468]  eta: 0:24:57  lr: 0.000024  pix_loss: 0.1289 (0.3461)  pix_loss_CNN: 0.2942 (0.6404)  time: 4.7895  data: 0.0000  max mem: 56958
+[15:12:47.778332] Epoch: [0]  [15160/15468]  eta: 0:23:26  lr: 0.000025  pix_loss: 0.1316 (0.3458)  pix_loss_CNN: 0.2876 (0.6400)  time: 5.0509  data: 0.0000  max mem: 56958
+[15:14:27.699989] Epoch: [0]  [15180/15468]  eta: 0:21:55  lr: 0.000025  pix_loss: 0.1358 (0.3455)  pix_loss_CNN: 0.2982 (0.6395)  time: 4.9960  data: 0.0000  max mem: 56958
+[15:16:05.392895] Epoch: [0]  [15200/15468]  eta: 0:20:24  lr: 0.000025  pix_loss: 0.1312 (0.3452)  pix_loss_CNN: 0.3043 (0.6391)  time: 4.8846  data: 0.0000  max mem: 56958
+[15:17:45.369256] Epoch: [0]  [15220/15468]  eta: 0:18:52  lr: 0.000025  pix_loss: 0.1294 (0.3449)  pix_loss_CNN: 0.2999 (0.6386)  time: 4.9988  data: 0.0000  max mem: 56958
+[15:19:25.347204] Epoch: [0]  [15240/15468]  eta: 0:17:21  lr: 0.000025  pix_loss: 0.1415 (0.3447)  pix_loss_CNN: 0.2954 (0.6382)  time: 4.9988  data: 0.0000  max mem: 56958
+[15:21:00.326079] Epoch: [0]  [15260/15468]  eta: 0:15:50  lr: 0.000025  pix_loss: 0.1393 (0.3444)  pix_loss_CNN: 0.2950 (0.6377)  time: 4.7489  data: 0.0000  max mem: 56958
+[15:22:35.724876] Epoch: [0]  [15280/15468]  eta: 0:14:18  lr: 0.000025  pix_loss: 0.1239 (0.3441)  pix_loss_CNN: 0.2833 (0.6373)  time: 4.7699  data: 0.0000  max mem: 56958
+[15:24:13.471590] Epoch: [0]  [15300/15468]  eta: 0:12:47  lr: 0.000025  pix_loss: 0.1179 (0.3438)  pix_loss_CNN: 0.2772 (0.6368)  time: 4.8873  data: 0.0000  max mem: 56958
+[15:25:51.604845] Epoch: [0]  [15320/15468]  eta: 0:11:16  lr: 0.000025  pix_loss: 0.1219 (0.3435)  pix_loss_CNN: 0.2771 (0.6364)  time: 4.9066  data: 0.0000  max mem: 56958
+[15:27:30.683649] Epoch: [0]  [15340/15468]  eta: 0:09:45  lr: 0.000025  pix_loss: 0.1233 (0.3433)  pix_loss_CNN: 0.2951 (0.6359)  time: 4.9539  data: 0.0000  max mem: 56958
+[15:29:14.039629] Epoch: [0]  [15360/15468]  eta: 0:08:13  lr: 0.000025  pix_loss: 0.1343 (0.3430)  pix_loss_CNN: 0.2892 (0.6355)  time: 5.1678  data: 0.0000  max mem: 56958
+[15:30:50.667835] Epoch: [0]  [15380/15468]  eta: 0:06:42  lr: 0.000025  pix_loss: 0.1377 (0.3427)  pix_loss_CNN: 0.2951 (0.6350)  time: 4.8314  data: 0.0000  max mem: 56958
+[15:32:29.972596] Epoch: [0]  [15400/15468]  eta: 0:05:10  lr: 0.000025  pix_loss: 0.1139 (0.3424)  pix_loss_CNN: 0.2655 (0.6346)  time: 4.9652  data: 0.0000  max mem: 56958
+[15:34:09.627394] Epoch: [0]  [15420/15468]  eta: 0:03:39  lr: 0.000025  pix_loss: 0.1306 (0.3422)  pix_loss_CNN: 0.3007 (0.6341)  time: 4.9827  data: 0.0000  max mem: 56958
+[15:35:47.680470] Epoch: [0]  [15440/15468]  eta: 0:02:08  lr: 0.000025  pix_loss: 0.1380 (0.3419)  pix_loss_CNN: 0.3041 (0.6337)  time: 4.9026  data: 0.0000  max mem: 56958
+[15:37:25.478779] Epoch: [0]  [15460/15468]  eta: 0:00:36  lr: 0.000025  pix_loss: 0.1323 (0.3416)  pix_loss_CNN: 0.2989 (0.6333)  time: 4.8899  data: 0.0000  max mem: 56958
+[15:38:00.111207] Epoch: [0]  [15467/15468]  eta: 0:00:04  lr: 0.000025  pix_loss: 0.1357 (0.3416)  pix_loss_CNN: 0.2980 (0.6331)  time: 4.9545  data: 0.0000  max mem: 56958
+[15:38:00.111272] Epoch: [0] Total time: 19:39:03 (4.5735 s / it)
+[15:38:00.112186] Averaged stats: lr: 0.000025  pix_loss: 0.1357 (0.3415)  pix_loss_CNN: 0.2980 (0.6332)
+[E ProcessGroupNCCL.cpp:475] [Rank 3] Watchdog caught collective operation timeout: WorkNCCL(SeqNum=665139, OpType=ALLREDUCE, NumelIn=6081922, NumelOut=6081922, Timeout(ms)=1800000) ran for 1800921 milliseconds before timing out.
+[E ProcessGroupNCCL.cpp:475] [Rank 1] Watchdog caught collective operation timeout: WorkNCCL(SeqNum=665139, OpType=ALLREDUCE, NumelIn=6081922, NumelOut=6081922, Timeout(ms)=1800000) ran for 1800140 milliseconds before timing out.
+[E ProcessGroupNCCL.cpp:475] [Rank 2] Watchdog caught collective operation timeout: WorkNCCL(SeqNum=665140, OpType=ALLREDUCE, NumelIn=6568448, NumelOut=6568448, Timeout(ms)=1800000) ran for 1814033 milliseconds before timing out.
+[E ProcessGroupNCCL.cpp:489] Some NCCL operations have failed or timed out. Due to the asynchronous nature of CUDA kernels, subsequent GPU operations might run on corrupted/incomplete data.
+[E ProcessGroupNCCL.cpp:495] To avoid data inconsistency, we are taking the entire process down.
+[E ProcessGroupNCCL.cpp:916] [Rank 3] NCCL watchdog thread terminated with exception: [Rank 3] Watchdog caught collective operation timeout: WorkNCCL(SeqNum=665139, OpType=ALLREDUCE, NumelIn=6081922, NumelOut=6081922, Timeout(ms)=1800000) ran for 1800921 milliseconds before timing out.
+[E ProcessGroupNCCL.cpp:489] Some NCCL operations have failed or timed out. Due to the asynchronous nature of CUDA kernels, subsequent GPU operations might run on corrupted/incomplete data.
+[E ProcessGroupNCCL.cpp:495] To avoid data inconsistency, we are taking the entire process down.
+[E ProcessGroupNCCL.cpp:916] [Rank 1] NCCL watchdog thread terminated with exception: [Rank 1] Watchdog caught collective operation timeout: WorkNCCL(SeqNum=665139, OpType=ALLREDUCE, NumelIn=6081922, NumelOut=6081922, Timeout(ms)=1800000) ran for 1800140 milliseconds before timing out.
+[2024-07-26 16:08:22,777] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 58630 closing signal SIGTERM
+[2024-07-26 16:08:22,777] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 58632 closing signal SIGTERM
+[2024-07-26 16:08:23,195] torch.distributed.elastic.multiprocessing.api: [ERROR] failed (exitcode: -6) local_rank: 1 (pid: 58631) of binary: /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python
+Traceback (most recent call last):
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 264, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+======================================================
+train_PromptGIP.py FAILED
+------------------------------------------------------
+Failures:
+[1]:
+  time      : 2024-07-26_16:08:22
+  host      : SH-IDC1-10-140-24-94
+  rank      : 3 (local_rank: 3)
+  exitcode  : -6 (pid: 58633)
+  error_file: <N/A>
+  traceback : Signal 6 (SIGABRT) received by PID 58633
+------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2024-07-26_16:08:22
+  host      : SH-IDC1-10-140-24-94
+  rank      : 1 (local_rank: 1)
+  exitcode  : -6 (pid: 58631)
+  error_file: <N/A>
+  traceback : Signal 6 (SIGABRT) received by PID 58631
+======================================================
+srun: error: SH-IDC1-10-140-24-94: task 0: Exited with exit code 1

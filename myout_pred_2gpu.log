@@ -1,0 +1,184 @@
+srun: job 3732464 queued and waiting for resources
+srun: job 3732464 has been allocated resources
+srun: Job 3732464 scheduled successfully!
+Current QUOTA_TYPE is [reserved], which means the job has occupied quota in RESERVED_TOTAL under your partition.
+Current PHX_PRIORITY is normal
+
+[2024-07-23 12:05:51,834] torch.distributed.run: [WARNING] 
+[2024-07-23 12:05:51,834] torch.distributed.run: [WARNING] *****************************************
+[2024-07-23 12:05:51,834] torch.distributed.run: [WARNING] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+[2024-07-23 12:05:51,834] torch.distributed.run: [WARNING] *****************************************
+| distributed init (rank 0): env://, gpu 0
+| distributed init (rank 1): env://, gpu 1
+[12:06:05.500761] job dir: /mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new
+[12:06:05.500900] Namespace(save_ckpt_freq=5,
+batch_size=16,
+epochs=15,
+accum_iter=4,
+model='mae_vit_large_patch16_dec512d8b_input256',
+input_size=256,
+mask_ratio=0.75,
+ckpt=None,
+weight_decay=0.05,
+lr=None,
+blr=0.0001,
+min_lr=1e-05,
+warmup_epochs=5,
+break_after_epoch=None,
+data_path='/mnt/petrelfs/zhaoxiangyu1/data/Test100_256',
+data_path_val='/mnt/petrelfs/zhaoxiangyu1/data/Test100_256',
+imagenet_percent=1,
+subsample=False,
+output_dir='experiments/weather_4tasks',
+log_dir='./output_dir',
+device='cuda',
+seed=0,
+resume='',
+start_epoch=0,
+num_workers=1,
+pin_mem=True,
+world_size=2,
+local_rank=-1,
+dist_on_itp=False,
+dist_url='env://',
+second_input_size=224,
+rank=0,
+gpu=0,
+distributed=True,
+dist_backend='nccl')
+[12:06:09.101989] 962472
+[12:06:09.102070] 274992
+[12:06:11.792683] 200
+[12:06:11.795064] Sampler_train = <torch.utils.data.distributed.DistributedSampler object at 0x7fd4c5baab00>
+[12:06:13.719900] Head: Simple_Head
+[12:06:28.914933] epoch_size is 1237464
+[12:06:28.916775] Model = MaskedAutoencoderViT(
+  (patch_embed): PatchEmbed(
+    (proj): Conv2d(2, 1024, kernel_size=(16, 16), stride=(16, 16))
+    (norm): Identity()
+  )
+  (patch_embed_4c): PatchEmbed(
+    (proj): Conv2d(4, 1024, kernel_size=(16, 16), stride=(16, 16))
+    (norm): Identity()
+  )
+  (align_patch): Linear(in_features=1024, out_features=1024, bias=True)
+  (blocks): ModuleList(
+    (0-23): 24 x Block(
+      (norm1): LayerNorm((1024,), eps=1e-06, elementwise_affine=True)
+      (attn): Attention(
+        (qkv): Linear(in_features=1024, out_features=3072, bias=True)
+        (attn_drop): Dropout(p=0.0, inplace=False)
+        (proj): Linear(in_features=1024, out_features=1024, bias=True)
+        (proj_drop): Dropout(p=0.0, inplace=False)
+      )
+      (drop_path): Identity()
+      (norm2): LayerNorm((1024,), eps=1e-06, elementwise_affine=True)
+      (mlp): Mlp(
+        (fc1): Linear(in_features=1024, out_features=4096, bias=True)
+        (act): GELU(approximate='none')
+        (drop1): Dropout(p=0.0, inplace=False)
+        (fc2): Linear(in_features=4096, out_features=1024, bias=True)
+        (drop2): Dropout(p=0.0, inplace=False)
+      )
+    )
+  )
+  (norm): LayerNorm((1024,), eps=1e-06, elementwise_affine=True)
+  (decoder_embed): Linear(in_features=1024, out_features=512, bias=True)
+  (decoder_blocks): ModuleList(
+    (0-7): 8 x Block(
+      (norm1): LayerNorm((512,), eps=1e-06, elementwise_affine=True)
+      (attn): Attention(
+        (qkv): Linear(in_features=512, out_features=1536, bias=True)
+        (attn_drop): Dropout(p=0.0, inplace=False)
+        (proj): Linear(in_features=512, out_features=512, bias=True)
+        (proj_drop): Dropout(p=0.0, inplace=False)
+      )
+      (drop_path): Identity()
+      (norm2): LayerNorm((512,), eps=1e-06, elementwise_affine=True)
+      (mlp): Mlp(
+        (fc1): Linear(in_features=512, out_features=2048, bias=True)
+        (act): GELU(approximate='none')
+        (drop1): Dropout(p=0.0, inplace=False)
+        (fc2): Linear(in_features=2048, out_features=512, bias=True)
+        (drop2): Dropout(p=0.0, inplace=False)
+      )
+    )
+  )
+  (decoder_norm): LayerNorm((512,), eps=1e-06, elementwise_affine=True)
+  (decoder_pred): Linear(in_features=512, out_features=512, bias=True)
+  (decoder_pred_4c): Linear(in_features=512, out_features=1024, bias=True)
+  (CNN_Head): Simple_Head(
+    (conv_first): Conv2d(2, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (HRconv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv_last): Conv2d(64, 2, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (lrelu): LeakyReLU(negative_slope=0.1, inplace=True)
+  )
+  (L1_loss): L1Loss()
+)
+[12:06:28.916809] base lr: 1.00e-04
+[12:06:28.916820] actual lr: 5.00e-05
+[12:06:28.916832] accumulate grad iterations: 4
+[12:06:28.916842] effective batch size: 128
+[12:06:29.240507] AdamW (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.95)
+    capturable: False
+    differentiable: False
+    eps: 1e-08
+    foreach: None
+    fused: None
+    lr: 5e-05
+    maximize: False
+    weight_decay: 0.0
+
+Parameter Group 1
+    amsgrad: False
+    betas: (0.9, 0.95)
+    capturable: False
+    differentiable: False
+    eps: 1e-08
+    foreach: None
+    fused: None
+    lr: 5e-05
+    maximize: False
+    weight_decay: 0.05
+)
+[12:06:29.240692] Start training for 15 epochs
+[12:06:42.061537] Epoch: [0]  [    0/38668]  eta: 5 days, 16:12:31  lr: 0.000000  pix_loss: 1.9263 (1.9263)  pix_loss_CNN: 1.6252 (1.6252)  time: 12.6811  data: 0.0001  max mem: 43193
+[W reducer.cpp:1346] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[W reducer.cpp:1346] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[12:08:44.949999] Epoch: [0]  [   20/38668]  eta: 2 days, 21:18:17  lr: 0.000000  pix_loss: 1.7350 (1.7701)  pix_loss_CNN: 1.4910 (1.5107)  time: 6.1444  data: 0.0000  max mem: 47023
+[12:10:50.774215] Epoch: [0]  [   40/38668]  eta: 2 days, 20:24:29  lr: 0.000000  pix_loss: 1.7650 (1.7774)  pix_loss_CNN: 1.5015 (1.5167)  time: 6.2912  data: 0.0000  max mem: 47023
+[12:13:07.005387] Epoch: [0]  [   60/38668]  eta: 2 days, 21:54:21  lr: 0.000000  pix_loss: 1.7597 (1.7756)  pix_loss_CNN: 1.4752 (1.5170)  time: 6.8115  data: 0.0000  max mem: 47023
+srun: Force Terminated job 3732464
+srun: Job step aborted: Waiting up to 2 seconds for job step to finish.
+srun: Easily find out why your job was killed by following the link below:
+	https://docs.phoenix.sensetime.com/FAQ/SlurmFAQ/Find-out-why-my-job-was-killed/
+slurmstepd: error: *** STEP 3732464.0 ON SH-IDC1-10-140-24-72 CANCELLED AT 2024-07-23T12:13:56 ***
+[2024-07-23 12:13:56,143] torch.distributed.elastic.agent.server.api: [WARNING] Received Signals.SIGTERM death signal, shutting down workers
+[2024-07-23 12:13:56,144] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 144187 closing signal SIGTERM
+[2024-07-23 12:13:56,152] torch.distributed.elastic.multiprocessing.api: [WARNING] Sending process 144188 closing signal SIGTERM
+Traceback (most recent call last):
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 255, in launch_agent
+    result = agent.run()
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/elastic/metrics/api.py", line 124, in wrapper
+    result = f(*args, **kwargs)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/elastic/agent/server/api.py", line 736, in run
+    result = self._invoke_run(role)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/elastic/agent/server/api.py", line 877, in _invoke_run
+    time.sleep(monitor_interval)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 62, in _terminate_process_handler
+    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
+torch.distributed.elastic.multiprocessing.api.SignalException: Process 144101 got signal: 15
+srun: error: Timed out waiting for job step to complete

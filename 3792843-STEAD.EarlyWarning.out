@@ -1,0 +1,248 @@
+WORLD_SIZE: 2 NODE_RANK: 0 DEVICES: 0,1,2,3,4,5,6,7
+MASTER_ADDR: SH-IDC1-10-140-24-69 MASTER_PORT: 12843 SLURM_PROCID: 0
+NNODES: 2
+torchrun --nproc_per_node 1 --nnodes 2 --master_addr SH-IDC1-10-140-24-69 --master_port 12843
+| distributed init (rank 1): env://, gpu 0
+| distributed init (rank 0): env://, gpu 0
+[20:58:29.887644] job dir: /mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new
+[20:58:29.887843] Namespace(save_ckpt_freq=5,
+batch_size=8,
+epochs=50,
+accum_iter=4,
+model='mae_vit_large_patch16_dec512d8b_input256',
+input_size=256,
+mask_ratio=0.75,
+ckpt=None,
+weight_decay=0.05,
+lr=None,
+blr=0.0001,
+min_lr=1e-05,
+warmup_epochs=5,
+break_after_epoch=None,
+data_path='/mnt/petrelfs/zhaoxiangyu1/data/Test100_256',
+data_path_val='/mnt/petrelfs/zhaoxiangyu1/data/Test100_256',
+imagenet_percent=1,
+subsample=False,
+output_dir='experiments/weather_5tasks',
+log_dir='./output_dir',
+device='cuda',
+seed=0,
+resume='',
+start_epoch=0,
+num_workers=1,
+pin_mem=True,
+world_size=2,
+local_rank=-1,
+dist_on_itp=False,
+dist_url='env://',
+second_input_size=224,
+rank=0,
+gpu=0,
+distributed=True,
+dist_backend='nccl')
+[20:58:37.166312] 1237464
+[20:58:37.166410] 274992
+[20:58:44.596979] 80
+[20:58:44.601774] Sampler_train = <torch.utils.data.distributed.DistributedSampler object at 0x7f1c18c39e40>
+[20:58:48.405025] Head: Simple_Head
+[20:59:11.412503] epoch_size is 1237464
+[20:59:11.416911] Model = MaskedAutoencoderViT(
+  (patch_embed): PatchEmbed(
+    (proj): Conv2d(2, 1024, kernel_size=(16, 16), stride=(16, 16))
+    (norm): Identity()
+  )
+  (patch_embed_4c): PatchEmbed(
+    (proj): Conv2d(4, 1024, kernel_size=(16, 16), stride=(16, 16))
+    (norm): Identity()
+  )
+  (align_patch): Linear(in_features=1024, out_features=1024, bias=True)
+  (blocks): ModuleList(
+    (0-23): 24 x Block(
+      (norm1): LayerNorm((1024,), eps=1e-06, elementwise_affine=True)
+      (attn): Attention(
+        (qkv): Linear(in_features=1024, out_features=3072, bias=True)
+        (attn_drop): Dropout(p=0.0, inplace=False)
+        (proj): Linear(in_features=1024, out_features=1024, bias=True)
+        (proj_drop): Dropout(p=0.0, inplace=False)
+      )
+      (drop_path): Identity()
+      (norm2): LayerNorm((1024,), eps=1e-06, elementwise_affine=True)
+      (mlp): Mlp(
+        (fc1): Linear(in_features=1024, out_features=4096, bias=True)
+        (act): GELU(approximate='none')
+        (drop1): Dropout(p=0.0, inplace=False)
+        (fc2): Linear(in_features=4096, out_features=1024, bias=True)
+        (drop2): Dropout(p=0.0, inplace=False)
+      )
+    )
+  )
+  (norm): LayerNorm((1024,), eps=1e-06, elementwise_affine=True)
+  (decoder_embed): Linear(in_features=1024, out_features=512, bias=True)
+  (decoder_blocks): ModuleList(
+    (0-7): 8 x Block(
+      (norm1): LayerNorm((512,), eps=1e-06, elementwise_affine=True)
+      (attn): Attention(
+        (qkv): Linear(in_features=512, out_features=1536, bias=True)
+        (attn_drop): Dropout(p=0.0, inplace=False)
+        (proj): Linear(in_features=512, out_features=512, bias=True)
+        (proj_drop): Dropout(p=0.0, inplace=False)
+      )
+      (drop_path): Identity()
+      (norm2): LayerNorm((512,), eps=1e-06, elementwise_affine=True)
+      (mlp): Mlp(
+        (fc1): Linear(in_features=512, out_features=2048, bias=True)
+        (act): GELU(approximate='none')
+        (drop1): Dropout(p=0.0, inplace=False)
+        (fc2): Linear(in_features=2048, out_features=512, bias=True)
+        (drop2): Dropout(p=0.0, inplace=False)
+      )
+    )
+  )
+  (decoder_norm): LayerNorm((512,), eps=1e-06, elementwise_affine=True)
+  (decoder_pred): Linear(in_features=512, out_features=512, bias=True)
+  (decoder_pred_4c): Linear(in_features=512, out_features=1024, bias=True)
+  (CNN_Head): Simple_Head(
+    (conv_first): Conv2d(2, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (HRconv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv_last): Conv2d(64, 2, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (lrelu): LeakyReLU(negative_slope=0.1, inplace=True)
+  )
+  (L1_loss): L1Loss()
+)
+[20:59:11.417026] base lr: 1.00e-04
+[20:59:11.417051] actual lr: 2.50e-05
+[20:59:11.417072] accumulate grad iterations: 4
+[20:59:11.417091] effective batch size: 64
+Traceback (most recent call last):
+  File "/mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/train_PromptGIP.py", line 319, in <module>
+    main(args)
+  File "/mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/train_PromptGIP.py", line 257, in main
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/nn/parallel/distributed.py", line 795, in __init__
+    _verify_param_shape_across_processes(self.process_group, parameters)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/utils.py", line 265, in _verify_param_shape_across_processes
+    return dist._verify_params_across_processes(process_group, tensors, logger)
+RuntimeError: [1] is setting up NCCL communicator and retrieving ncclUniqueId from [0] via c10d key-value store by key '1', but store->get('1') got error: Socket Timeout
+Exception raised from doWait at ../torch/csrc/distributed/c10d/TCPStore.cpp:445 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::string) + 0x57 (0x7fd8cdcc9617 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x68 (0x7fd8cdc84a56 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libc10.so)
+frame #2: c10d::TCPStore::doWait(c10::ArrayRef<std::string>, std::chrono::duration<long, std::ratio<1l, 1000l> >) + 0x32c (0x7fd91ace200c in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::TCPStore::doGet(std::string const&) + 0x32 (0x7fd91ace3192 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #4: c10d::TCPStore::get(std::string const&) + 0x55 (0x7fd91ace35b5 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #5: c10d::PrefixStore::get(std::string const&) + 0x31 (0x7fd91ac9ae01 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #6: c10d::PrefixStore::get(std::string const&) + 0x31 (0x7fd91ac9ae01 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: c10d::PrefixStore::get(std::string const&) + 0x31 (0x7fd91ac9ae01 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: c10d::PrefixStore::get(std::string const&) + 0x31 (0x7fd91ac9ae01 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: c10d::ProcessGroupNCCL::broadcastUniqueNCCLID(ncclUniqueId*, bool, std::string const&, int) + 0xb2 (0x7fd8cf0bf312 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cuda.so)
+frame #10: c10d::ProcessGroupNCCL::getNCCLComm(std::string const&, std::vector<c10::Device, std::allocator<c10::Device> > const&, c10d::OpType, int, bool) + 0x203 (0x7fd8cf0c4ce3 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cuda.so)
+frame #11: c10d::ProcessGroupNCCL::allgather(std::vector<std::vector<at::Tensor, std::allocator<at::Tensor> >, std::allocator<std::vector<at::Tensor, std::allocator<at::Tensor> > > >&, std::vector<at::Tensor, std::allocator<at::Tensor> >&, c10d::AllgatherOptions const&) + 0xae0 (0x7fd8cf0e0f20 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cuda.so)
+frame #12: <unknown function> + 0x567bbeb (0x7fd91ac8fbeb in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #13: <unknown function> + 0x5685598 (0x7fd91ac99598 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #14: <unknown function> + 0x4cb046b (0x7fd91a2c446b in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #15: <unknown function> + 0x4cae44c (0x7fd91a2c244c in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #16: <unknown function> + 0x1a039d8 (0x7fd9170179d8 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #17: <unknown function> + 0x568ca53 (0x7fd91aca0a53 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #18: <unknown function> + 0x5698267 (0x7fd91acac267 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #19: c10d::verify_params_across_processes(c10::intrusive_ptr<c10d::ProcessGroup, c10::detail::intrusive_target_default_null_type<c10d::ProcessGroup> > const&, std::vector<at::Tensor, std::allocator<at::Tensor> > const&, c10::optional<std::weak_ptr<c10d::Logger> > const&) + 0x265 (0x7fd91ad00a35 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so)
+frame #20: <unknown function> + 0xc10f9a (0x7fd92d86cf9a in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_python.so)
+frame #21: <unknown function> + 0x3f7304 (0x7fd92d053304 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/lib/libtorch_python.so)
+frame #22: /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python() [0x4fdc87]
+frame #23: _PyObject_MakeTpCall + 0x25b (0x4f741b in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #24: _PyEval_EvalFrameDefault + 0x53d6 (0x4f34c6 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #25: _PyFunction_Vectorcall + 0x6f (0x4fe0cf in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #26: _PyEval_EvalFrameDefault + 0x31f (0x4ee40f in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #27: _PyFunction_Vectorcall + 0x6f (0x4fe0cf in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #28: _PyObject_FastCallDictTstate + 0x17d (0x4f681d in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #29: /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python() [0x507588]
+frame #30: _PyObject_MakeTpCall + 0x2ab (0x4f746b in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #31: _PyEval_EvalFrameDefault + 0x5757 (0x4f3847 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #32: _PyFunction_Vectorcall + 0x6f (0x4fe0cf in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #33: _PyEval_EvalFrameDefault + 0x31f (0x4ee40f in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #34: /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python() [0x5950f2]
+frame #35: PyEval_EvalCode + 0x87 (0x595037 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #36: /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python() [0x5c5e67]
+frame #37: /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python() [0x5c0fb0]
+frame #38: /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python() [0x45970e]
+frame #39: _PyRun_SimpleFileObject + 0x19f (0x5bb53f in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #40: _PyRun_AnyFileObject + 0x43 (0x5bb2a3 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #41: Py_RunMain + 0x38d (0x5b805d in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #42: Py_BytesMain + 0x39 (0x588679 in /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python)
+frame #43: __libc_start_main + 0xf5 (0x7fda00a9a3d5 in /lib64/libc.so.6)
+frame #44: /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python() [0x58852e]
+. This may indicate a possible application crash on rank 0 or a network set up issue.
+[2024-07-30 21:29:01,303] torch.distributed.elastic.multiprocessing.api: [ERROR] failed (exitcode: 1) local_rank: 0 (pid: 157995) of binary: /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python
+Traceback (most recent call last):
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 264, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+train_PromptGIP.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2024-07-30_21:29:01
+  host      : SH-IDC1-10-140-24-87
+  rank      : 1 (local_rank: 0)
+  exitcode  : 1 (pid: 157995)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================
+srun: error: SH-IDC1-10-140-24-87: task 1: Exited with exit code 1
+[E ProcessGroupNCCL.cpp:475] [Rank 0] Watchdog caught collective operation timeout: WorkNCCL(SeqNum=2, OpType=ALLGATHER, NumelIn=1, NumelOut=2, Timeout(ms)=1800000) ran for 1800088 milliseconds before timing out.
+Traceback (most recent call last):
+  File "/mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/train_PromptGIP.py", line 319, in <module>
+    main(args)
+  File "/mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/train_PromptGIP.py", line 257, in main
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/nn/parallel/distributed.py", line 795, in __init__
+    _verify_param_shape_across_processes(self.process_group, parameters)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/utils.py", line 265, in _verify_param_shape_across_processes
+    return dist._verify_params_across_processes(process_group, tensors, logger)
+RuntimeError: DDP expects same model across all ranks, but Rank 0 has 408 params, while rank 1 has inconsistent 0 params.
+[E ProcessGroupNCCL.cpp:489] Some NCCL operations have failed or timed out. Due to the asynchronous nature of CUDA kernels, subsequent GPU operations might run on corrupted/incomplete data.
+[E ProcessGroupNCCL.cpp:495] To avoid data inconsistency, we are taking the entire process down.
+[E ProcessGroupNCCL.cpp:916] [Rank 0] NCCL watchdog thread terminated with exception: [Rank 0] Watchdog caught collective operation timeout: WorkNCCL(SeqNum=2, OpType=ALLGATHER, NumelIn=1, NumelOut=2, Timeout(ms)=1800000) ran for 1800088 milliseconds before timing out.
+[2024-07-30 21:29:16,314] torch.distributed.elastic.multiprocessing.api: [ERROR] failed (exitcode: -6) local_rank: 0 (pid: 201992) of binary: /mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/python
+Traceback (most recent call last):
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/mnt/petrelfs/zhaoxiangyu1/anaconda3/envs/weather/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 264, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+=======================================================
+train_PromptGIP.py FAILED
+-------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+-------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2024-07-30_21:29:16
+  host      : SH-IDC1-10-140-24-69
+  rank      : 0 (local_rank: 0)
+  exitcode  : -6 (pid: 201992)
+  error_file: <N/A>
+  traceback : Signal 6 (SIGABRT) received by PID 201992
+=======================================================
+srun: error: SH-IDC1-10-140-24-69: task 0: Exited with exit code 1

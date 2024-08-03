@@ -7,8 +7,30 @@ from torch.utils.data import Dataset
 from evaluate.add_degradation_various import *
 from dataset.image_operators import *
 
-import dataset.util as util
+import warnings
+from torch.utils.data import Dataset
+import os
+import sys
+import time
+from timeit import default_timer as timer
+import einops
 
+from dataset.data_utiles import *
+import dataset.util as util
+import pandas as pd
+
+from petrel_client.client import Client
+
+client = Client(conf_path="~/petreloss.conf")
+
+zscore_normalizations_sevir = {
+    'vil':{'scale':47.54,'shift':33.44},
+    'ir069':{'scale':1174.68,'shift':-3683.58},
+    'ir107':{'scale':2562.43,'shift':-1552.80},
+    'lght':{'scale':0.60517,'shift':0.02990}
+}
+
+# todo: ir609->ir107; 插帧60min->30min; 预测，4frame->1frame
 
 def add_degradation_two_images(img_HQ1, img_HQ2, deg_type):
     if deg_type == 'GaussianNoise':
@@ -100,784 +122,799 @@ def add_degradation_two_images(img_HQ1, img_HQ2, deg_type):
 
 class DatasetLowlevel_Train(Dataset):
     def __init__(self, dataset_path, input_size, phase, ITS_path=None, LOL_path=None, Rain13K_path=None,
-                 GoPro_path=None, FiveK_path=None, LLF_path=None, RealOld_path=None):
+                 GoPro_path=None, FiveK_path=None, LLF_path=None, RealOld_path=None, preprocess_OPERA=None,
+                 size_target_center=None, full_opera_context=None, preprocess_HRIT=None, splits_path=None,
+                 path_to_sample_ids='', years=None, split='training',**kwargs):
+        
+        np.random.seed(5)
+        self.split=split
+        self.HQ_size = input_size
+        self.phase = phase
+        w4c_predict = True
+        # base dataset
+        self.paths_HQ, self.sizes_HQ = util.get_image_paths('img', dataset_path)
+        # self.paths_base_len = len(self.paths_HQ)
+        print('dataset for test: ', len(self.paths_HQ))
+
+        if w4c_predict:
+            # self.regions = ['roxi_0004', 'roxi_0005', 'roxi_0006', 'roxi_0007']
+            self.regions = ['roxi_0004']
+            self.data_split = split
+            self.input_product = "REFL-BT"
+            self.output_product = "RATE"
+            self.len_seq_in=1
+            self.len_seq_predict=1
+            self.splits_df = load_timestamps(splits_path)
+            self.swap_time_ch=True
+            self.years=years
+            self.shuffle=False
+            self.padding=0
+            self.static_data=False
+            self.max_samples=None
+            self.stats_path=None
+            self.static_root=''
+            self.generate_samples=False
+            self.sat_bands = ['IR_016', 'IR_039', 'IR_087', 'IR_097', 'IR_108', 'IR_120', 'IR_134', 'VIS006', 'VIS008', 'WV_062', 'WV_073']
+            # self.sat_bands = ['IR_108', 'VIS006', 'VIS008', 'WV_073']
+            self.crop_edge = None
+            self.out_min=[0.01]
+            self.out_max=[1]
+            self.full_opera_context=1512 # (105+42+105)*6; 
+            self.size_target_center=252 # 42*6; 
+            self.data_root='s3://w4c/w4c23/stage-2'
+            # self.data_root='/mnt/petrelfs/zhaoxiangyu1/data/w4c'
+            self.preprocess_target = preprocess_OPERA
+            self.size_target_center = size_target_center
+            self.full_opera_context = full_opera_context
+            self.crop = int((self.full_opera_context - self.size_target_center) / 2) #calculate centre of image to begin crop
+            self.preprocess_input = preprocess_HRIT
+            self.path_to_sample_ids = path_to_sample_ids
+
+            self.idxs = load_sample_ids(
+                self.data_split, 
+                self.splits_df,
+                self.len_seq_in, 
+                self.len_seq_predict, 
+                self.regions,
+                self.generate_samples, 
+                self.years, 
+                self.path_to_sample_ids)
+            
+                    
+            self.in_ds = load_dataset(self.data_root, self.data_split, self.regions, self.years, self.input_product) #LOAD DATASET
+
+            if self.data_split not in ['test', 'heldout']:
+                self.out_ds = load_dataset(self.data_root, self.data_split, self.regions, self.years, self.output_product)
+            else:
+                self.out_ds = []
+        
+    def __len__(self):
+        return len(self.idxs) #+ len(self.paths_LQ_ITS) + len(self.paths_HQ_LOL) + len(self.paths_HQ_Rain13K)
+    
+    
+    def load_in(self, in_seq, seq_r, metadata, loaded_input=False):
+        in0=time.time()
+        input_data, in_masks = get_sequence(
+        in_seq, 
+        self.data_root, 
+        self.data_split, 
+        seq_r, 
+        self.input_product,
+        self.sat_bands, 
+        self.preprocess_input, 
+        self.swap_time_ch, 
+        self.in_ds,
+    )
+
+        # print(np.shape(input_data), time.time()-in0,"in sequence time")
+        return input_data, metadata
+
+    def load_out(self, out_seq, seq_r, metadata):
+        t1=time.time()
+         #GROUND TRUTH (OUTPUT)
+        if self.data_split not in ['test', 'heldout']:
+            output_data, out_masks = get_sequence(out_seq, self.data_root, self.data_split, seq_r,
+            self.output_product, [], self.preprocess_target,self.swap_time_ch, self.out_ds)
+
+            # collapse time to channels
+            metadata['target']['mask'] = out_masks
+        else: #Just return [] if its test/heldout data
+            output_data = np.array([])
+        # print(time.time()-t1,"out sequence")
+        return output_data, metadata
+
+    def load_in_out(self, in_seq, out_seq=None, seq_r=None,):
+        metadata = {'input': {'mask': [], 'timestamps': in_seq},
+                    'target': {'mask': [], 'timestamps': out_seq},
+                    'region': seq_r
+                   }
+
+        t0=time.time()
+        input_data, metadata = self.load_in(in_seq, seq_r, metadata)
+        output_data, metadata = self.load_out(out_seq, seq_r, metadata)
+
+        # if self.sat_idx is not None:
+        #     input_data = get_channels(input_data, self.sat_idx)
+
+        if self.crop_edge is not None:
+            input_data = crop_numpy(input_data, self.crop_edge, self.padding)
+        
+
+        # print(time.time()-t0,"seconds")
+        return input_data, output_data, metadata
+    
+    def get_w4c_data(self, id):
+            in_seq = self.idxs[id][0]
+            out_seq = self.idxs[id][1]
+            seq_r = self.idxs[id][2]
+            sat, rad, metadata = self.load_in_out(in_seq, out_seq, seq_r)
+            # print(sat.shape)
+            sat = sat[[4, 10], :, :, :]
+            return sat, rad, metadata
+
+
+    def __getitem__(self, idx):
+
+        dataset_choice = 'w4c'
+
+        if self.split == 'training':
+            if dataset_choice == 'w4c':
+                sat, rad, metadata = self.get_w4c_data(idx)
+                sat_in = einops.rearrange(sat, 'c l h w -> h w (c l)')
+                rad_out = einops.rearrange(rad, 'c l h w -> h w (c l)')
+                random_index = random.randint(0, len(self.idxs)-1)
+                context_sat, context_rad, metadata = self.get_w4c_data(random_index)
+                context_sat_in = einops.rearrange(context_sat, 'c l h w -> h w (c l)')
+                context_rad_out = einops.rearrange(context_rad, 'c l h w -> h w (c l)')
+
+                if self.phase == 'train':
+                    # if the image size is too small
+                    #print(HQ_size)
+                    deg_type = 'w4c_forecast'
+                    H, W, _ = sat_in.shape
+                    #print(H, W)
+                    if H != self.HQ_size or W != self.HQ_size:
+                        sat_in = cv2.resize(np.copy(sat_in), (self.HQ_size, self.HQ_size),
+                                            interpolation=cv2.INTER_LINEAR)
+                        context_sat_in = cv2.resize(np.copy(context_sat_in), (self.HQ_size, self.HQ_size),
+                                            interpolation=cv2.INTER_LINEAR)
+                    # resized_image_data = cv2.resize(image_data, (224, 224))
+                    H, W, _ = rad_out.shape
+                    if H != self.HQ_size or W != self.HQ_size:
+                        rad_out = np.expand_dims(cv2.resize(np.copy(rad_out), (self.HQ_size, self.HQ_size),
+                                            interpolation=cv2.INTER_LINEAR), axis=2)
+
+                        context_rad_out = np.expand_dims(cv2.resize(np.copy(context_rad_out), (self.HQ_size, self.HQ_size),
+                                            interpolation=cv2.INTER_LINEAR), axis=2)
+
+            if dataset_choice == 'w4c_reconstruct': 
+                sat, rad, metadata = self.get_w4c_data(idx)
+
+            img_HQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(sat_in, (2, 0, 1)))).float()
+            img_HQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(rad_out, (2, 0, 1)))).float()
+            img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(context_sat_in, (2, 0, 1)))).float()
+            img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(context_rad_out, (2, 0, 1)))).float()
+
+            input_query_img1 = img_LQ1
+            target_img1 = img_LQ2
+            input_query_img2 = img_HQ1
+            target_img2 = img_HQ2
+            batch = torch.stack([input_query_img1, target_img1, input_query_img2, target_img2], dim=0)
+            # batch = [input_query_img1, target_img1, input_query_img2, target_img2]
+
+            return batch, deg_type
+        
+        else:
+
+            if dataset_choice == 'w4c':
+                sat, rad, metadata = self.get_w4c_data(idx)
+                sat_in = einops.rearrange(sat, 'c l h w -> h w (c l)')
+                rad_out = einops.rearrange(rad, 'c l h w -> h w (c l)')
+                random_index = random.randint(0, len(self.idxs)-1)
+                context_sat, context_rad, metadata = self.get_w4c_data(random_index)
+                context_sat_in = einops.rearrange(context_sat, 'c l h w -> h w (c l)')
+                context_rad_out = einops.rearrange(context_rad, 'c l h w -> h w (c l)')
+
+                if self.phase == 'train':
+                    # if the image size is too small
+                    #print(HQ_size)
+                    deg_type = 'w4c_forecast'
+                    H, W, _ = sat_in.shape
+                    #print(H, W)
+                    if H != self.HQ_size or W != self.HQ_size:
+                        sat_in = cv2.resize(np.copy(sat_in), (self.HQ_size, self.HQ_size),
+                                            interpolation=cv2.INTER_LINEAR)
+                        context_sat_in = cv2.resize(np.copy(context_sat_in), (self.HQ_size, self.HQ_size),
+                                            interpolation=cv2.INTER_LINEAR)
+                    # resized_image_data = cv2.resize(image_data, (224, 224))
+                    H, W, _ = rad_out.shape
+                    if H != self.HQ_size or W != self.HQ_size:
+                        rad_out = np.expand_dims(cv2.resize(np.copy(rad_out), (self.HQ_size, self.HQ_size),
+                                            interpolation=cv2.INTER_LINEAR), axis=2)
+
+                        context_rad_out = np.expand_dims(cv2.resize(np.copy(context_rad_out), (self.HQ_size, self.HQ_size),
+                                            interpolation=cv2.INTER_LINEAR), axis=2)
+
+            if dataset_choice == 'w4c_reconstruct': 
+                sat, rad, metadata = self.get_w4c_data(idx)
+
+            img_HQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(sat_in, (2, 0, 1)))).float()
+            img_HQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(rad_out, (2, 0, 1)))).float()
+            img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(context_sat_in, (2, 0, 1)))).float()
+            img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(context_rad_out, (2, 0, 1)))).float()
+            
+            # batch = torch.stack([input_query_img1, target_img1, input_query_img2, target_img2], dim=0)
+            # batch = [input_query_img1, target_img1, input_query_img2, target_img2]
+
+            img_HQ2 = np.repeat(img_HQ2, 2, axis=0)
+            img_LQ2 = np.repeat(img_LQ2, 2, axis=0)
+
+            # return batch, deg_type
+            input_query_img1 = img_HQ1
+            target_img1 = img_HQ2
+            input_query_img2 = img_LQ1
+            target_img2 = img_LQ2
+
+            # batch = torch.stack([input_query_img1, target_img1, input_query_img2, target_img2], dim=0)
+            
+            batch = {'input_query_img1': input_query_img1, 'target_img1': target_img1,
+                    'input_query_img2': input_query_img2, 'target_img2': target_img2}
+            
+            return batch, deg_type
+
+
+class DatasetSevir_Train(Dataset):
+    def __init__(self, data_path, input_size, phase, task='sevir'):
         
         np.random.seed(5)
         self.HQ_size = input_size
         self.phase = phase
-        
+        self.task = task
+        self.data_choice = data_path
         # base dataset
-        self.paths_HQ, self.sizes_HQ = util.get_image_paths('img', dataset_path)
-        self.paths_base_len = len(self.paths_HQ)
-        
-        # dehaze dataset (ITS)
-        if ITS_path is not None:
-            self.dataset_path_HQ_ITS = os.path.join(ITS_path, 'clear')
-            self.dataset_path_LQ_ITS = os.path.join(ITS_path, 'hazy')
-            self.paths_HQ_ITS, self.sizes_HQ_ITS = util.get_image_paths('img', self.dataset_path_HQ_ITS)
-            self.paths_LQ_ITS, self.sizes_LQ_ITS = util.get_image_paths('img', self.dataset_path_LQ_ITS)
-            self.paths_ITS_len = len(self.paths_LQ_ITS)
-        
-        # low-light enhancement dataset (LOL)
-        if LOL_path is not None:
-            self.dataset_path_HQ_LOL = os.path.join(LOL_path, 'high')
-            self.dataset_path_LQ_LOL = os.path.join(LOL_path, 'low')
-            self.paths_HQ_LOL, self.sizes_HQ_LOL = util.get_image_paths('img', self.dataset_path_HQ_LOL)
-            self.paths_LQ_LOL, self.sizes_LQ_LOL = util.get_image_paths('img', self.dataset_path_LQ_LOL)
-            self.paths_LOL_len = len(self.paths_LQ_LOL)
-            sorted(self.paths_HQ_LOL)
-            sorted(self.paths_LQ_LOL)
-            
-        # Derain dataset (Rain13K)
-        if Rain13K_path is not None:
-            self.dataset_path_HQ_Rain13K = os.path.join(Rain13K_path, 'target')
-            self.dataset_path_LQ_Rain13K = os.path.join(Rain13K_path, 'input')
-            self.paths_HQ_Rain13K, self.sizes_HQ_Rain13K = util.get_image_paths('img', self.dataset_path_HQ_Rain13K)
-            self.paths_LQ_Rain13K, self.sizes_LQ_Rain13K = util.get_image_paths('img', self.dataset_path_LQ_Rain13K)
-            self.paths_Rain13K_len = len(self.paths_LQ_Rain13K)
-            sorted(self.paths_HQ_Rain13K)
-            sorted(self.paths_LQ_Rain13K)
-            
-        # Motion Deblur dataset (GoPro)
-        if GoPro_path is not None:
-            self.dataset_path_HQ_GoPro = os.path.join(GoPro_path, 'groundtruth')
-            self.dataset_path_LQ_GoPro = os.path.join(GoPro_path, 'input')
-            self.paths_HQ_GoPro, self.sizes_HQ_GoPro = util.get_image_paths('img', self.dataset_path_HQ_GoPro)
-            self.paths_LQ_GoPro, self.sizes_LQ_GoPro = util.get_image_paths('img', self.dataset_path_LQ_GoPro)
-            self.paths_GoPro_len = len(self.paths_LQ_GoPro)
-            sorted(self.paths_HQ_GoPro)
-            sorted(self.paths_LQ_GoPro)
-            
-        # Image Retouching dataset (MIT-Adobe FiveK)
-        if FiveK_path is not None:
-            self.dataset_path_HQ_FiveK = os.path.join(FiveK_path, 'expert_C_train')
-            self.dataset_path_LQ_FiveK = os.path.join(FiveK_path, 'raw_input_train_png')
-            self.paths_HQ_FiveK, self.sizes_HQ_FiveK = util.get_image_paths('img', self.dataset_path_HQ_FiveK)
-            self.paths_LQ_FiveK, self.sizes_LQ_FiveK = util.get_image_paths('img', self.dataset_path_LQ_FiveK)
-            self.paths_FiveK_len = len(self.paths_LQ_FiveK)
-            sorted(self.paths_HQ_FiveK)
-            sorted(self.paths_LQ_FiveK)
-            
-        
-        # Local Laplacian Filter dataset (MIT-Adobe FiveK - LLF)
-        if LLF_path is not None:
-            self.dataset_path_HQ_LLF = os.path.join(LLF_path, 'expert_C_LLF_GT_train')
-            self.dataset_path_LQ_LLF = os.path.join(LLF_path, 'expert_C_train')
-            self.paths_HQ_LLF, self.sizes_HQ_LLF = util.get_image_paths('img', self.dataset_path_HQ_LLF)
-            self.paths_LQ_LLF, self.sizes_LQ_LLF = util.get_image_paths('img', self.dataset_path_LQ_LLF)
-            self.paths_LLF_len = len(self.paths_LQ_LLF)
-            sorted(self.paths_HQ_LLF)
-            sorted(self.paths_LQ_LLF)
-            
-        # RealOld dataset
-        if RealOld_path is not None:
-            self.dataset_path_HQ_RealOld = os.path.join(RealOld_path, 'HQ')
-            self.dataset_path_LQ_RealOld = os.path.join(RealOld_path, 'LQ')
-            self.paths_HQ_RealOld, self.sizes_HQ_RealOld = util.get_image_paths('img', self.dataset_path_HQ_RealOld)
-            self.paths_LQ_RealOld, self.sizes_LQ_RealOld = util.get_image_paths('img', self.dataset_path_LQ_RealOld)
-            self.paths_RealOld_len = len(self.paths_LQ_RealOld)
-            sorted(self.paths_HQ_RealOld)
-            sorted(self.paths_LQ_RealOld)
-        
-        #self.dataset_list = ['Base', 'ITS', 'LOL', 'Rain13K', 'RealOld', 'FiveK', 'LLF']
-        self.dataset_list = ['Base', 'ITS', 'LOL', 'Rain13K', 'LLF']
-        
-        #self.dataset_list = ['Base', 'ITS']
-        print('dataset list: ', self.dataset_list)
-        
-        self.degradation_type_list = ['GaussianNoise', 'GaussianBlur', 'JPEG', 'LowLight',
-                                    'Rain', 'SPNoise', 'PoissonNoise', 'Ringing',
-                                    'r_l', 'Inpainting', 'Laplacian', 'Canny']
-        
-        print('degradation_type list: ', self.degradation_type_list)
-        
-    def __len__(self):
-        return len(self.paths_HQ) #+ len(self.paths_LQ_ITS) + len(self.paths_HQ_LOL) + len(self.paths_HQ_Rain13K)
+        # self.paths_HQ, self.sizes_HQ = util.get_image_paths('img', dataset_path)
+        # self.paths_base_len = len(self.paths_HQ)
+        # print('dataset for test: ', len(self.paths_HQ))
+        self.catalog = pd.read_csv('dataset/output.csv', low_memory=False)
+        img_types = set(['vis','ir069','ir107','vil'])
+        events = self.catalog.groupby('id').filter(lambda x: img_types.issubset(set(x['img_type']))).groupby('id')
+        self.event_ids = list(events.groups.keys())
 
+        self.dataset_list = ['sevir', 'trans', 'inter']
+
+        if self.phase == 'train':
+            # self.event_ids = self.event_ids[:11408]
+            self.event_ids = self.event_ids[:11458]
+        else:
+            self.event_ids = self.event_ids[11488:]
+    
+    def get_line_time(self, value):
+        row = self.catalog.loc[self.catalog['id'] == value].iloc[0]
+        time = row['file_name'].split('/')[1]
+        return time
+    
+    def is_day_time(self, value):
+        row = self.catalog.loc[self.catalog['id'] == value].iloc[0]
+        time = row['time_utc'].split(' ')[1]
+        return time
+
+    def __len__(self):
+        if self.task == 'sevir':
+            if self.phase == 'train':
+                # return len(self.event_ids)*49
+                return len(self.event_ids)*24
+            else:
+                return len(self.event_ids)*4
+        elif self.task == 'trans':
+            # return len(self.event_ids)*49
+            if self.phase == 'train':
+                return len(self.event_ids)*24
+            else:
+                return len(self.event_ids)*4
+        elif self.task == 'inter':
+            if self.phase == 'train':
+                return len(self.event_ids)*36
+            else:
+                return len(self.event_ids)*4
+        elif self.task == 'predict':
+            if self.phase == 'train':
+                return len(self.event_ids)*24
+            else:
+                return len(self.event_ids)*4
+        elif self.task == 'ir_predict':
+            if self.phase == 'train':
+                return len(self.event_ids)*24
+            else:
+                return len(self.event_ids)*4
+        elif self.task == '2c_tasks':
+            if self.phase == 'train':
+                return len(self.event_ids)*24
+            else:
+                return len(self.event_ids)*4
+        elif self.task == 'down_scaling':
+            if self.phase == 'train':
+                return len(self.event_ids)*24
+            else:
+                return len(self.event_ids)*4
+    
+    def get_sevir_in_out(self, ids):
+        # evrty event has 49 frame
+
+        if self.phase == 'train':
+            event_id = ids // 24
+            frame_id = (ids % 24)*2
+        else:
+            event_id = ids // 4
+            frame_id = (ids % 4)*10
+
+        event = self.event_ids[event_id]
+        event_time = self.get_line_time(event)
+
+        in_variables = ['ir069', 'ir107']
+        # out_variables = ['vis']
+        out_variables = ['vil']
+        event_data = []
+        out_data = []
+
+        for variable in in_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, frame_id]
+            # normalization
+            if variable == 'ir069':
+                data = (data-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
+            else:
+                data = (data-zscore_normalizations_sevir['ir107']['shift'])/zscore_normalizations_sevir['ir107']['scale']
+            event_data.append(data)
+        sat_in = np.stack(event_data, axis=2)
+
+        for variable in out_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, frame_id]
+            # normalization
+            if variable == 'vil':
+                data = (data-zscore_normalizations_sevir['vil']['shift'])/zscore_normalizations_sevir['vil']['scale']
+                data = np.expand_dims(data, axis=-1)
+            else:
+                print('only can use vil as target!')
+            out_data.append(data)
+        # sat_out = np.repeat(out_data, 2, axis=0)
+        # sat_out = np.transpose(sat_out, (1, 2, 0))
+        sat_out = out_data[0]
+        return sat_in, sat_out
+    
+    def get_vis_reconstruction(self, ids):
+        # evrty event has 49 frame
+
+        if self.phase == 'train':
+            event_id = ids // 24
+            frame_id = (ids % 24)*2
+        else:
+            event_id = ids // 4
+            frame_id = (ids % 4)*10
+
+        event = self.event_ids[event_id]
+        event_time = self.get_line_time(event)
+
+        in_variables = ['ir069', 'ir107']
+        # out_variables = ['vis']
+        out_variables = ['vis']
+        event_data = []
+        out_data = []
+
+        for variable in out_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, frame_id]
+            # normalization
+            if data.mean() > 100:
+                data = (data-zscore_normalizations_sevir['vis']['shift'])/zscore_normalizations_sevir['vis']['scale']
+                data = np.expand_dims(data, axis=-1)
+            else:
+                data = get_random_day_vis()
+            out_data.append(data)
+        sat_out = out_data[0]
+
+        for variable in in_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, frame_id]
+            # normalization
+            if variable == 'ir069':
+                data = (data-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
+            else:
+                data = (data-zscore_normalizations_sevir['ir107']['shift'])/zscore_normalizations_sevir['ir107']['scale']
+            event_data.append(data)
+        sat_in = np.stack(event_data, axis=2)
+
+        return sat_in, sat_out
+    
+    def get_ir_trans(self, ids):
+        # evrty event has 49 frame
+        if self.phase == 'train':
+            event_id = ids // 24
+            frame_id = (ids % 24)*2
+
+        else:
+            event_id = ids // 4
+            frame_id = (ids % 4)*10
+
+        event = self.event_ids[event_id]
+        event_time = self.get_line_time(event)
+
+        in_variables = ['ir069']
+        # out_variables = ['vis']
+        out_variables = ['ir107']
+        event_data = []
+        out_data = []
+
+        for variable in in_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, frame_id]
+            # normalization
+            if variable == 'ir069':
+                data = (data-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
+                data = np.dstack((data, data))
+            else:
+                data = (data-zscore_normalizations_sevir['ir107']['shift'])/zscore_normalizations_sevir['ir107']['scale']
+                data = np.dstack((data, data))
+            event_data.append(data)
+        sat_in = event_data[0]
+
+        for variable in out_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, frame_id]
+            # normalization
+            if variable == 'ir107':
+                data = (data-zscore_normalizations_sevir['ir107']['shift'])/zscore_normalizations_sevir['ir107']['scale']
+                data = np.expand_dims(data, axis=-1)
+            else:
+                data = (data-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
+                data = np.expand_dims(data, axis=-1)
+            out_data.append(data)
+        # sat_out = np.repeat(out_data, 2, axis=0)
+        # sat_out = np.transpose(sat_out, (1, 2, 0))
+        sat_out = out_data[0]
+        return sat_in, sat_out
+    
+    def get_sevir_predict(self, ids):
+        # evrty event has 49 frame
+        if self.phase == 'train':
+            event_id = ids // 24
+            frame_id = ids % 24
+
+        else:
+            event_id = ids // 4
+            frame_id = (ids % 4)*5
+            
+        event = self.event_ids[event_id]
+        event_time = self.get_line_time(event)
+
+        in_variables = ['vil']
+        data_list = [frame_id, frame_id+6, frame_id+12, frame_id+18, frame_id+24]
+
+        for variable in in_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, data_list]
+            # normalization
+            if variable == 'vil':
+                data = (data-zscore_normalizations_sevir['vil']['shift'])/zscore_normalizations_sevir['vil']['scale']
+                # data = np.expand_dims(data, axis=-1)
+        vil_in = data[:,:,:-1]
+        vil_out = data[:,:,-1]
+        vil_out = np.expand_dims(vil_out, axis=-1)
+        return vil_in, vil_out
+    
+    def get_ir_predict(self, ids):
+        # evrty event has 49 frame
+        if self.phase == 'train':
+            event_id = ids // 24
+            frame_id = ids % 24
+
+        else:
+            event_id = ids // 4
+            frame_id = (ids % 4)*5
+            
+        event = self.event_ids[event_id]
+        event_time = self.get_line_time(event)
+
+        in_variables = ['ir069']
+        data_list = [frame_id, frame_id+6, frame_id+12, frame_id+18, frame_id+24]
+
+        for variable in in_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, data_list]
+            # normalization
+            if variable == 'ir069':
+                data = (data-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
+                # data = np.expand_dims(data, axis=-1)
+        ir_in = data[:,:,:-1]
+        ir_out = data[:,:,-1]
+        ir_out = np.expand_dims(ir_out, axis=-1)
+        return ir_in, ir_out
+    
+    def get_sevir_inter(self, ids):
+        # evrty event has 49 frame
+        if self.phase == 'train':
+            event_id = ids // 36
+            frame_id = ids % 36
+        else:
+            event_id = ids // 4
+            frame_id = (ids % 4)*10
+
+        event = self.event_ids[event_id]
+        event_time = self.get_line_time(event)
+
+        in_variables = ['vil']
+        data_list = [frame_id, frame_id+12, frame_id+6]
+
+        for variable in in_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, data_list]
+            # normalization
+            if variable == 'vil':
+                data = (data-zscore_normalizations_sevir['vil']['shift'])/zscore_normalizations_sevir['vil']['scale']
+                # data = np.expand_dims(data, axis=-1)
+        vil_in = data[:,:,:-1]
+        vil_out = data[:,:,-1]
+        vil_out = np.expand_dims(vil_out, axis=-1)
+        return vil_in, vil_out
+    
+    def get_sevir_vil_down_scaling(self, ids, variable_type=['vil']):
+        # evrty event has 49 frame
+        if self.phase == 'train':
+            event_id = ids // 24
+            frame_id = (ids % 24)*2
+        else:
+            event_id = ids // 4
+            frame_id = (ids % 4)*10
+
+        event = self.event_ids[event_id]
+        event_time = self.get_line_time(event)
+
+        in_variables = variable_type
+
+        for variable in in_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, frame_id]
+            # normalization
+            if variable == 'vil':
+                data = (data-zscore_normalizations_sevir['vil']['shift'])/zscore_normalizations_sevir['vil']['scale']
+                # data = np.expand_dims(data, axis=-1)
+        vil_in = data[:,:]
+        vil_out = data[:,:]
+        vil_in = np.expand_dims(vil_in, axis=-1)
+        vil_in = np.dstack((vil_in, vil_in))
+        vil_out = np.expand_dims(vil_out, axis=-1)
+        if variable_type[0] == 'vil':
+            # down_scaling: vil_in 384->256->64
+            vil_in = cv2.resize(np.copy(vil_in), (64, 64),
+                        interpolation=cv2.INTER_LINEAR)
+        else:
+            vil_in = cv2.resize(np.copy(vil_in), (96, 96),
+                        interpolation=cv2.INTER_LINEAR)
+        return vil_in, vil_out
 
     def __getitem__(self, idx):
-        #dataset_choice = np.random.choice(self.dataset_list, p=[14/20, 1/20, 1/20, 1/20, 1/20, 1/20, 1/20])
-        #dataset_choice = np.random.choice(self.dataset_list, p=[1/2, 1/2])
-        dataset_choice = np.random.choice(self.dataset_list, p=[12/20, 2/20, 2/20, 2/20, 2/20])
-        
-        if dataset_choice == 'Base':
-            random_index1 = random.randint(0, self.paths_base_len-1)
-            HQ1_path = self.paths_HQ[random_index1]
-            random_index2 = random.randint(0, self.paths_base_len-1)
-            HQ2_path = self.paths_HQ[random_index2]
+
+        if self.task == '2c_tasks':
+            dataset_choice = np.random.choice(self.dataset_list, p=[1/3, 1/3, 1/3])
+            # dataset_choice = self.data_choice
+        else:
+            dataset_choice = self.data_choice
+        deg_type = dataset_choice
+        #todo event_ids并未对齐全部数据集
+        random_index = random.randint(0, len(self.event_ids)-1)
+        if dataset_choice == 'sevir':
+            sat_in, rad_out = self.get_sevir_in_out(idx)
+            context_sat_in, context_rad_out = self.get_sevir_in_out(random_index)
+        elif dataset_choice == 'ir_trans':
+            sat_in, rad_out = self.get_ir_trans(idx)
+            context_sat_in, context_rad_out = self.get_ir_trans(random_index)
+        elif dataset_choice == 'predict':
+            sat_in, rad_out = self.get_sevir_predict(idx)
+            context_sat_in, context_rad_out = self.get_sevir_predict(random_index)
+        elif dataset_choice == 'inter':
+            sat_in, rad_out = self.get_sevir_inter(idx)
+            context_sat_in, context_rad_out = self.get_sevir_inter(random_index)
+        elif dataset_choice == 'down_scaling_vil':
+            sat_in, rad_out = self.get_sevir_vil_down_scaling(idx, variable_type=['vil'])
+            context_sat_in, context_rad_out = self.get_sevir_vil_down_scaling(random_index, variable_type=['vil'])
+        elif dataset_choice == 'down_scaling_ir':
+            sat_in, rad_out = self.get_sevir_vil_down_scaling(idx, variable_type=['ir069'])
+            context_sat_in, context_rad_out = self.get_sevir_vil_down_scaling(random_index, variable_type=['ir069'])
+        elif dataset_choice == 'ir_predict':
+            sat_in, rad_out = self.get_ir_predict(idx, variable_type=['ir069'])
+            context_sat_in, context_rad_out = self.get_ir_predict(random_index, variable_type=['ir069'])
+        H, W, _ = sat_in.shape
+        if H != self.HQ_size or W != self.HQ_size:
+            sat_in = cv2.resize(np.copy(sat_in), (self.HQ_size, self.HQ_size),
+                                interpolation=cv2.INTER_LINEAR)
+            context_sat_in = cv2.resize(np.copy(context_sat_in), (self.HQ_size, self.HQ_size),
+                                interpolation=cv2.INTER_LINEAR)
+        H, W, _ = rad_out.shape
+        if H != self.HQ_size or W != self.HQ_size:
+            rad_out = np.expand_dims(cv2.resize(np.copy(rad_out), (self.HQ_size, self.HQ_size),
+                                interpolation=cv2.INTER_LINEAR), axis=2)
+
+            context_rad_out = np.expand_dims(cv2.resize(np.copy(context_rad_out), (self.HQ_size, self.HQ_size),
+                                interpolation=cv2.INTER_LINEAR), axis=2)
+
+        if self.phase == 'train':
+            # hwc->chw
+            img_HQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(sat_in, (2, 0, 1)))).float()
+            img_HQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(rad_out, (2, 0, 1)))).float()
+            img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(context_sat_in, (2, 0, 1)))).float()
+            img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(context_rad_out, (2, 0, 1)))).float()
             
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            
-            if self.phase == 'train':
-                # if the image size is too small
-                #print(HQ_size)
-                H, W, _ = img_HQ1.shape
-                #print(H, W)
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_HQ1 = cv2.resize(np.copy(img_HQ1), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_HQ2.shape
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_HQ2 = cv2.resize(np.copy(img_HQ2), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                if img_HQ1.ndim == 2:
-                    img_HQ1 = np.expand_dims(img_HQ1, axis=2)
-                    img_HQ1 = np.concatenate((img_HQ1, img_HQ1, img_HQ1), axis=2)
-                if img_HQ2.ndim == 2:
-                    img_HQ2 = np.expand_dims(img_HQ2, axis=2)
-                    img_HQ2 = np.concatenate((img_HQ2, img_HQ2, img_HQ2), axis=2)
-                    
-                if img_HQ1.shape[2] !=3:
-                    img_HQ1 = np.concatenate((img_HQ1, img_HQ1, img_HQ1), axis=2)
-                if img_HQ2.shape[2] !=3:
-                    img_HQ2 = np.concatenate((img_HQ2, img_HQ2, img_HQ2), axis=2)
-            
-            
-            # add degradation to HQ
-            
-            
-            degradation_type_1 = ['LowLight', '']
-            degradation_type_2 = ['GaussianBlur', 'Ringing', 'r_l', '']
-            degradation_type_3 = ['GaussianNoise', 'SPNoise', 'PoissonNoise', '']
-            degradation_type_4 = ['JPEG', '']
-            degradation_type_5 = ['Inpainting', 'Rain', '']
-            
-            round_select = np.random.choice(['1', 'Single'], p=[4/5, 1/5])
-            #round_select = np.random.choice(['1', 'Single'], p=[0, 1])
-            
-            if round_select == '1':
-                # 1 round
-                deg_type1 = random.choice(degradation_type_1)
-                deg_type2 = random.choice(degradation_type_2)
-                deg_type3 = random.choice(degradation_type_3)
-                deg_type4 = random.choice(degradation_type_4)
-                deg_type5 = random.choice(degradation_type_5)
-                img_LQ1, img_LQ2, _, _ = add_degradation_two_images(np.copy(img_HQ1), np.copy(img_HQ2), deg_type1)
-                img_LQ1, img_LQ2, _, _ = add_degradation_two_images(np.copy(img_LQ1), np.copy(img_LQ2), deg_type2)
-                img_LQ1, img_LQ2, _, _ = add_degradation_two_images(np.copy(img_LQ1), np.copy(img_LQ2), deg_type3)
-                img_LQ1, img_LQ2, _, _ = add_degradation_two_images(np.copy(img_LQ1), np.copy(img_LQ2), deg_type4)
-                img_LQ1, img_LQ2, _, _ = add_degradation_two_images(np.copy(img_LQ1), np.copy(img_LQ2), deg_type5)
-                deg_type = 'R1_'+deg_type1+'_'+deg_type2+'_'+deg_type3+'_'+deg_type4+'_'+deg_type5
-                # print(deg_type)
-                # print(img_HQ1.shape)
-                # print(img_LQ1.shape)
-                # print(img_HQ2.shape)
-                # print(img_LQ2.shape)
-            elif round_select == 'Single':
-                deg_type1 = random.choice(self.degradation_type_list)
-                img_LQ1, img_LQ2, img_HQ1, img_HQ2 = add_degradation_two_images(img_HQ1, img_HQ2, deg_type1)
-                deg_type = deg_type1
-                
-            
-   
-            
-        elif dataset_choice == 'ITS':
-            random_index1 = random.randint(0, self.paths_ITS_len-1)
-            LQ1_path = self.paths_LQ_ITS[random_index1]
-            HQ1_name = LQ1_path.split('/')[-1].split('_')[0]
-            HQ1_path = os.path.join(self.dataset_path_HQ_ITS, '{}.png'.format(HQ1_name))
-            
-            random_index2 = random.randint(0, self.paths_ITS_len-1)
-            LQ2_path = self.paths_LQ_ITS[random_index2]
-            HQ2_name = LQ2_path.split('/')[-1].split('_')[0]
-            HQ2_path = os.path.join(self.dataset_path_HQ_ITS, '{}.png'.format(HQ2_name))
-            deg_type = 'ITS'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-            
-            # H_GT, W_GT, _ = img_HQ1.shape
-            # H_LQ, W_LQ, _ = img_LQ1.shape
-            
-            # crop_size_H = np.abs(H_LQ-H_GT)//2
-            # crop_size_W = np.abs(W_LQ-W_GT)//2
-            # img_HQ1 = img_HQ1[crop_size_H:-crop_size_H, crop_size_W:-crop_size_W, :]
-            # img_HQ2 = img_HQ2[crop_size_H:-crop_size_H, crop_size_W:-crop_size_W, :]
-        
-        elif dataset_choice == 'LOL':
-            random_index1 = random.randint(0, self.paths_LOL_len-1)
-            LQ1_path = self.paths_LQ_LOL[random_index1]
-            HQ1_path = self.paths_HQ_LOL[random_index1]
-            
-            random_index2 = random.randint(0, self.paths_LOL_len-1)
-            LQ2_path = self.paths_LQ_LOL[random_index2]
-            HQ2_path = self.paths_HQ_LOL[random_index2]
-            
-            deg_type = 'LOL'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-        
-        elif dataset_choice == 'GoPro':
-            random_index1 = random.randint(0, self.paths_GoPro_len-1)
-            LQ1_path = self.paths_LQ_GoPro[random_index1]
-            HQ1_path = self.paths_HQ_GoPro[random_index1]
-            
-            random_index2 = random.randint(0, self.paths_GoPro_len-1)
-            LQ2_path = self.paths_LQ_GoPro[random_index2]
-            HQ2_path = self.paths_HQ_GoPro[random_index2]
-            
-            deg_type = 'GoPro'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-        
-        elif dataset_choice == 'FiveK':
-            random_index1 = random.randint(0, self.paths_FiveK_len-1)
-            LQ1_path = self.paths_LQ_FiveK[random_index1]
-            HQ1_path = self.paths_HQ_FiveK[random_index1]
-            
-            random_index2 = random.randint(0, self.paths_FiveK_len-1)
-            LQ2_path = self.paths_LQ_FiveK[random_index2]
-            HQ2_path = self.paths_HQ_FiveK[random_index2]
-            
-            deg_type = 'FiveK'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-        
-        elif dataset_choice == 'LLF':
-            random_index1 = random.randint(0, self.paths_LLF_len-1)
-            LQ1_path = self.paths_LQ_LLF[random_index1]
-            HQ1_path = self.paths_HQ_LLF[random_index1]
-            
-            random_index2 = random.randint(0, self.paths_LLF_len-1)
-            LQ2_path = self.paths_LQ_LLF[random_index2]
-            HQ2_path = self.paths_HQ_LLF[random_index2]
-            
-            deg_type = 'LLF'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-            
-        elif dataset_choice == 'Rain13K':
-            random_index1 = random.randint(0, self.paths_Rain13K_len-1)
-            LQ1_path = self.paths_LQ_Rain13K[random_index1]
-            HQ1_path = self.paths_HQ_Rain13K[random_index1]
-            
-            random_index2 = random.randint(0, self.paths_Rain13K_len-1)
-            LQ2_path = self.paths_LQ_Rain13K[random_index2]
-            HQ2_path = self.paths_HQ_Rain13K[random_index2]
-            
-            deg_type = 'Rain13K'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-            
-            if self.phase == 'train':
-                # if the image size is too small
-                #print(HQ_size)
-                H, W, _ = img_HQ1.shape
-                #print(H, W)
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_HQ1 = cv2.resize(np.copy(img_HQ1), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_HQ2.shape
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_HQ2 = cv2.resize(np.copy(img_HQ2), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_LQ1.shape
-                #print(H, W)
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_LQ1 = cv2.resize(np.copy(img_LQ1), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_LQ2.shape
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_LQ2 = cv2.resize(np.copy(img_LQ2), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-        
-        elif dataset_choice == 'RealOld':
-            random_index1 = random.randint(0, self.paths_RealOld_len-1)
-            LQ1_path = self.paths_LQ_RealOld[random_index1]
-            HQ1_path = self.paths_HQ_RealOld[random_index1]
-            
-            random_index2 = random.randint(0, self.paths_RealOld_len-1)
-            LQ2_path = self.paths_LQ_RealOld[random_index2]
-            HQ2_path = self.paths_HQ_RealOld[random_index2]
-            
-            deg_type = 'RealOld'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-            
-            if self.phase == 'train':
-                # if the image size is too small
-                #print(HQ_size)
-                H, W, _ = img_HQ1.shape
-                #print(H, W)
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_HQ1 = cv2.resize(np.copy(img_HQ1), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_HQ2.shape
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_HQ2 = cv2.resize(np.copy(img_HQ2), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_LQ1.shape
-                #print(H, W)
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_LQ1 = cv2.resize(np.copy(img_LQ1), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_LQ2.shape
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_LQ2 = cv2.resize(np.copy(img_LQ2), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
+            img_HQ2 = np.repeat(img_HQ2, 2, axis=0)
+            img_LQ2 = np.repeat(img_LQ2, 2, axis=0)
+
+            input_query_img1 = img_LQ1
+            target_img1 = img_LQ2
+            input_query_img2 = img_HQ1
+            target_img2 = img_HQ2
+
+            # if dataset_choice == 'predict':
+            #     batch = [input_query_img1, target_img1, input_query_img2, target_img2]
+            # else:
+            #     batch = torch.stack([input_query_img1, target_img1, input_query_img2, target_img2], dim=0)
+            batch = [input_query_img1, target_img1, input_query_img2, target_img2]
+
+            return batch, deg_type
         
         else:
-            print('Error! Undefined dataset: {}'.format(dataset_choice))
-            exit()
-        
-        if self.phase == 'train':
-            scale = 1
-            # randomly crop to designed size
-            H1, W1, C = img_LQ1.shape
-            LQ_size = self.HQ_size // scale
-            rnd_h = random.randint(0, max(0, H1 - LQ_size))
-            rnd_w = random.randint(0, max(0, W1 - LQ_size))
-            img_LQ1 = img_LQ1[rnd_h:rnd_h + LQ_size, rnd_w:rnd_w + LQ_size, :]
-            rnd_h_HQ, rnd_w_HQ = int(rnd_h * scale), int(rnd_w * scale)
-            img_HQ1 = img_HQ1[rnd_h_HQ:rnd_h_HQ + self.HQ_size, rnd_w_HQ:rnd_w_HQ + self.HQ_size, :]
+            img_HQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(sat_in, (2, 0, 1)))).float()
+            img_HQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(rad_out, (2, 0, 1)))).float()
+            img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(context_sat_in, (2, 0, 1)))).float()
+            img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(context_rad_out, (2, 0, 1)))).float()
             
-            H2, W2, C = img_LQ2.shape
-            LQ_size = self.HQ_size // scale
-            rnd_h = random.randint(0, max(0, H2 - LQ_size))
-            rnd_w = random.randint(0, max(0, W2 - LQ_size))
-            img_LQ2 = img_LQ2[rnd_h:rnd_h + LQ_size, rnd_w:rnd_w + LQ_size, :]
-            rnd_h_HQ, rnd_w_HQ = int(rnd_h * scale), int(rnd_w * scale)
-            img_HQ2 = img_HQ2[rnd_h_HQ:rnd_h_HQ + self.HQ_size, rnd_w_HQ:rnd_w_HQ + self.HQ_size, :]
+            img_HQ2 = np.repeat(img_HQ2, 2, axis=0)
+            img_LQ2 = np.repeat(img_LQ2, 2, axis=0)
 
-            # augmentation - flip, rotate
-            img_LQ1, img_LQ2, img_HQ1, img_HQ2 = util.augment([img_LQ1, img_LQ2, img_HQ1, img_HQ2], hflip=True, rot=True)
+            input_query_img1 = img_LQ1
+            target_img1 = img_LQ2
+            input_query_img2 = img_HQ1
+            target_img2 = img_HQ2
+
+            # batch = torch.stack([input_query_img1, target_img1, input_query_img2, target_img2], dim=0)
+            
+            batch = {'input_query_img1': input_query_img1, 'target_img1': target_img1,
+                    'input_query_img2': input_query_img2, 'target_img2': target_img2}
+            
+            return batch, deg_type
+
+            # return batch, deg_type
+
+class Dataset_dblur(Dataset):
+    def __init__(self, split='train'):
+        super().__init__()
+        self.height = 256
+        self.width = 256
+        self.ceph_root = 's3://gongjunchao/radar_deblur/blur_data/I10O12/sevir/incepu/TimeStep12'
+        self.file_list = self._init_file_list(split)
+        self.split = split
         
+        ## sproject client ##
+        self.client = Client("~/petreloss.conf")
+
+        assert len(self.file_list) == self.__len__()
+        print('SEVIR {} number: {}'.format(str(self.split), len(self.file_list)))
+
+    def _init_file_list(self, split):
+        """
+        preprocessed total length: 12120
+        """
+        if split == 'train':
+            files = list(range(0, 9000))
+        elif split == 'valid':
+            files = list(range(9000, 10500))
+        elif split == 'test':
+            files = list(range(10500, 12000))
+        return files
     
-        
-        img_HQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ1, (2, 0, 1)))).float()
-        img_HQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ2, (2, 0, 1)))).float()
-        img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ1, (2, 0, 1)))).float()
-        img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ2, (2, 0, 1)))).float()
-        
-        
-        input_query_img1 = img_LQ1
-        target_img1 = img_HQ1
-        input_query_img2 = img_LQ2
-        target_img2 = img_HQ2
-        
-        batch = torch.stack([input_query_img1, target_img1, input_query_img2, target_img2], dim=0)
-
-        return batch, deg_type
-
-class DatasetLowlevel_Train_onlyrestore(Dataset):
-    def __init__(self, dataset_path, input_size, phase, ITS_path=None, LOL_path=None, Rain13K_path=None,
-                 GoPro_path=None, FiveK_path=None, LLF_path=None, RealOld_path=None):
-        
-        np.random.seed(5)
-        self.HQ_size = input_size
-        self.phase = phase
-        
-        # base dataset
-        self.paths_HQ, self.sizes_HQ = util.get_image_paths('img', dataset_path)
-        self.paths_base_len = len(self.paths_HQ)
-        
-        # dehaze dataset (ITS)
-        if ITS_path is not None:
-            self.dataset_path_HQ_ITS = os.path.join(ITS_path, 'clear')
-            self.dataset_path_LQ_ITS = os.path.join(ITS_path, 'hazy')
-            self.paths_HQ_ITS, self.sizes_HQ_ITS = util.get_image_paths('img', self.dataset_path_HQ_ITS)
-            self.paths_LQ_ITS, self.sizes_LQ_ITS = util.get_image_paths('img', self.dataset_path_LQ_ITS)
-            self.paths_ITS_len = len(self.paths_LQ_ITS)
-        
-        # low-light enhancement dataset (LOL)
-        if LOL_path is not None:
-            self.dataset_path_HQ_LOL = os.path.join(LOL_path, 'high')
-            self.dataset_path_LQ_LOL = os.path.join(LOL_path, 'low')
-            self.paths_HQ_LOL, self.sizes_HQ_LOL = util.get_image_paths('img', self.dataset_path_HQ_LOL)
-            self.paths_LQ_LOL, self.sizes_LQ_LOL = util.get_image_paths('img', self.dataset_path_LQ_LOL)
-            self.paths_LOL_len = len(self.paths_LQ_LOL)
-            sorted(self.paths_HQ_LOL)
-            sorted(self.paths_LQ_LOL)
-            
-        # Derain dataset (Rain13K)
-        if Rain13K_path is not None:
-            self.dataset_path_HQ_Rain13K = os.path.join(Rain13K_path, 'target')
-            self.dataset_path_LQ_Rain13K = os.path.join(Rain13K_path, 'input')
-            self.paths_HQ_Rain13K, self.sizes_HQ_Rain13K = util.get_image_paths('img', self.dataset_path_HQ_Rain13K)
-            self.paths_LQ_Rain13K, self.sizes_LQ_Rain13K = util.get_image_paths('img', self.dataset_path_LQ_Rain13K)
-            self.paths_Rain13K_len = len(self.paths_LQ_Rain13K)
-            sorted(self.paths_HQ_Rain13K)
-            sorted(self.paths_LQ_Rain13K)
-            
-        # Motion Deblur dataset (GoPro)
-        if GoPro_path is not None:
-            self.dataset_path_HQ_GoPro = os.path.join(GoPro_path, 'groundtruth')
-            self.dataset_path_LQ_GoPro = os.path.join(GoPro_path, 'input')
-            self.paths_HQ_GoPro, self.sizes_HQ_GoPro = util.get_image_paths('img', self.dataset_path_HQ_GoPro)
-            self.paths_LQ_GoPro, self.sizes_LQ_GoPro = util.get_image_paths('img', self.dataset_path_LQ_GoPro)
-            self.paths_GoPro_len = len(self.paths_LQ_GoPro)
-            sorted(self.paths_HQ_GoPro)
-            sorted(self.paths_LQ_GoPro)
-            
-        # Image Retouching dataset (MIT-Adobe FiveK)
-        if FiveK_path is not None:
-            self.dataset_path_HQ_FiveK = os.path.join(FiveK_path, 'expert_C_train')
-            self.dataset_path_LQ_FiveK = os.path.join(FiveK_path, 'raw_input_train_png')
-            self.paths_HQ_FiveK, self.sizes_HQ_FiveK = util.get_image_paths('img', self.dataset_path_HQ_FiveK)
-            self.paths_LQ_FiveK, self.sizes_LQ_FiveK = util.get_image_paths('img', self.dataset_path_LQ_FiveK)
-            self.paths_FiveK_len = len(self.paths_LQ_FiveK)
-            sorted(self.paths_HQ_FiveK)
-            sorted(self.paths_LQ_FiveK)
-            
-        
-        # Local Laplacian Filter dataset (MIT-Adobe FiveK - LLF)
-        if LLF_path is not None:
-            self.dataset_path_HQ_LLF = os.path.join(LLF_path, 'expert_C_LLF_GT_train')
-            self.dataset_path_LQ_LLF = os.path.join(LLF_path, 'expert_C_train')
-            self.paths_HQ_LLF, self.sizes_HQ_LLF = util.get_image_paths('img', self.dataset_path_HQ_LLF)
-            self.paths_LQ_LLF, self.sizes_LQ_LLF = util.get_image_paths('img', self.dataset_path_LQ_LLF)
-            self.paths_LLF_len = len(self.paths_LQ_LLF)
-            sorted(self.paths_HQ_LLF)
-            sorted(self.paths_LQ_LLF)
-            
-        # RealOld dataset
-        if RealOld_path is not None:
-            self.dataset_path_HQ_RealOld = os.path.join(RealOld_path, 'HQ')
-            self.dataset_path_LQ_RealOld = os.path.join(RealOld_path, 'LQ')
-            self.paths_HQ_RealOld, self.sizes_HQ_RealOld = util.get_image_paths('img', self.dataset_path_HQ_RealOld)
-            self.paths_LQ_RealOld, self.sizes_LQ_RealOld = util.get_image_paths('img', self.dataset_path_LQ_RealOld)
-            self.paths_RealOld_len = len(self.paths_LQ_RealOld)
-            sorted(self.paths_HQ_RealOld)
-            sorted(self.paths_LQ_RealOld)
-        
-        #self.dataset_list = ['Base', 'ITS', 'LOL', 'Rain13K', 'RealOld', 'FiveK', 'LLF']
-        self.dataset_list = ['Base', 'ITS', 'Rain13K']
-        
-        #self.dataset_list = ['Base', 'ITS']
-        print('dataset list: ', self.dataset_list)
-        
-        self.degradation_type_list = ['GaussianNoise', 'GaussianBlur', 'JPEG',
-                                    'Rain', 'SPNoise', 'PoissonNoise', 'Ringing',
-                                    'r_l', 'Inpainting']
-        
-        print('degradation_type list: ', self.degradation_type_list)
-        
     def __len__(self):
-        return len(self.paths_HQ) #+ len(self.paths_LQ_ITS) + len(self.paths_HQ_LOL) + len(self.paths_HQ_Rain13K)
+        return len(self.file_list)
 
+    def _load_frames(self, file, type):
+        file_path = os.path.join(self.ceph_root, f'{type}_{file}.npy')
+        with io.BytesIO(self.client.get(file_path)) as f:
+            frame_data = np.load(f)
+        tensor = torch.from_numpy(frame_data)
+        return tensor
 
-    def __getitem__(self, idx):
-        #dataset_choice = np.random.choice(self.dataset_list, p=[14/20, 1/20, 1/20, 1/20, 1/20, 1/20, 1/20])
-        #dataset_choice = np.random.choice(self.dataset_list, p=[1/2, 1/2])
-        dataset_choice = np.random.choice(self.dataset_list, p=[9/11, 1/11, 1/11])
-        
-        if dataset_choice == 'Base':
-            random_index1 = random.randint(0, self.paths_base_len-1)
-            HQ1_path = self.paths_HQ[random_index1]
-            random_index2 = random.randint(0, self.paths_base_len-1)
-            HQ2_path = self.paths_HQ[random_index2]
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            
-            if self.phase == 'train':
-                # if the image size is too small
-                #print(HQ_size)
-                H, W, _ = img_HQ1.shape
-                #print(H, W)
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_HQ1 = cv2.resize(np.copy(img_HQ1), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_HQ2.shape
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_HQ2 = cv2.resize(np.copy(img_HQ2), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                if img_HQ1.ndim == 2:
-                    img_HQ1 = np.expand_dims(img_HQ1, axis=2)
-                    img_HQ1 = np.concatenate((img_HQ1, img_HQ1, img_HQ1), axis=2)
-                if img_HQ2.ndim == 2:
-                    img_HQ2 = np.expand_dims(img_HQ2, axis=2)
-                    img_HQ2 = np.concatenate((img_HQ2, img_HQ2, img_HQ2), axis=2)
-                    
-                if img_HQ1.shape[2] !=3:
-                    img_HQ1 = np.concatenate((img_HQ1, img_HQ1, img_HQ1), axis=2)
-                if img_HQ2.shape[2] !=3:
-                    img_HQ2 = np.concatenate((img_HQ2, img_HQ2, img_HQ2), axis=2)
-            
-            
-            # add degradation to HQ
-            
-            
-            degradation_type_1 = ['LowLight', '']
-            degradation_type_2 = ['GaussianBlur', 'Ringing', 'r_l', '']
-            degradation_type_3 = ['GaussianNoise', 'SPNoise', 'PoissonNoise', '']
-            degradation_type_4 = ['JPEG', '']
-            degradation_type_5 = ['Inpainting', 'Rain', '']
-            
-            round_select = np.random.choice(['1', 'Single'], p=[4/5, 1/5])
-            #round_select = np.random.choice(['1', 'Single'], p=[0, 1])
-            
-            if round_select == '1':
-                # 1 round
-                deg_type1 = random.choice(degradation_type_1)
-                deg_type2 = random.choice(degradation_type_2)
-                deg_type3 = random.choice(degradation_type_3)
-                deg_type4 = random.choice(degradation_type_4)
-                deg_type5 = random.choice(degradation_type_5)
-                img_LQ1, img_LQ2, _, _ = add_degradation_two_images(np.copy(img_HQ1), np.copy(img_HQ2), deg_type1)
-                img_LQ1, img_LQ2, _, _ = add_degradation_two_images(np.copy(img_LQ1), np.copy(img_LQ2), deg_type2)
-                img_LQ1, img_LQ2, _, _ = add_degradation_two_images(np.copy(img_LQ1), np.copy(img_LQ2), deg_type3)
-                img_LQ1, img_LQ2, _, _ = add_degradation_two_images(np.copy(img_LQ1), np.copy(img_LQ2), deg_type4)
-                img_LQ1, img_LQ2, _, _ = add_degradation_two_images(np.copy(img_LQ1), np.copy(img_LQ2), deg_type5)
-                deg_type = 'R1_'+deg_type1+'_'+deg_type2+'_'+deg_type3+'_'+deg_type4+'_'+deg_type5
-                # print(deg_type)
-                # print(img_HQ1.shape)
-                # print(img_LQ1.shape)
-                # print(img_HQ2.shape)
-                # print(img_LQ2.shape)
-            elif round_select == 'Single':
-                deg_type1 = random.choice(self.degradation_type_list)
-                img_LQ1, img_LQ2, img_HQ1, img_HQ2 = add_degradation_two_images(img_HQ1, img_HQ2, deg_type1)
-                deg_type = deg_type1
-                
-            
-   
-            
-        elif dataset_choice == 'ITS':
-            random_index1 = random.randint(0, self.paths_ITS_len-1)
-            LQ1_path = self.paths_LQ_ITS[random_index1]
-            HQ1_name = LQ1_path.split('/')[-1].split('_')[0]
-            HQ1_path = os.path.join(self.dataset_path_HQ_ITS, '{}.png'.format(HQ1_name))
-            
-            random_index2 = random.randint(0, self.paths_ITS_len-1)
-            LQ2_path = self.paths_LQ_ITS[random_index2]
-            HQ2_name = LQ2_path.split('/')[-1].split('_')[0]
-            HQ2_path = os.path.join(self.dataset_path_HQ_ITS, '{}.png'.format(HQ2_name))
-            deg_type = 'ITS'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-            
-            # H_GT, W_GT, _ = img_HQ1.shape
-            # H_LQ, W_LQ, _ = img_LQ1.shape
-            
-            # crop_size_H = np.abs(H_LQ-H_GT)//2
-            # crop_size_W = np.abs(W_LQ-W_GT)//2
-            # img_HQ1 = img_HQ1[crop_size_H:-crop_size_H, crop_size_W:-crop_size_W, :]
-            # img_HQ2 = img_HQ2[crop_size_H:-crop_size_H, crop_size_W:-crop_size_W, :]
-        
-        elif dataset_choice == 'LOL':
-            random_index1 = random.randint(0, self.paths_LOL_len-1)
-            LQ1_path = self.paths_LQ_LOL[random_index1]
-            HQ1_path = self.paths_HQ_LOL[random_index1]
-            
-            random_index2 = random.randint(0, self.paths_LOL_len-1)
-            LQ2_path = self.paths_LQ_LOL[random_index2]
-            HQ2_path = self.paths_HQ_LOL[random_index2]
-            
-            deg_type = 'LOL'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-        
-        elif dataset_choice == 'GoPro':
-            random_index1 = random.randint(0, self.paths_GoPro_len-1)
-            LQ1_path = self.paths_LQ_GoPro[random_index1]
-            HQ1_path = self.paths_HQ_GoPro[random_index1]
-            
-            random_index2 = random.randint(0, self.paths_GoPro_len-1)
-            LQ2_path = self.paths_LQ_GoPro[random_index2]
-            HQ2_path = self.paths_HQ_GoPro[random_index2]
-            
-            deg_type = 'GoPro'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-        
-        elif dataset_choice == 'FiveK':
-            random_index1 = random.randint(0, self.paths_FiveK_len-1)
-            LQ1_path = self.paths_LQ_FiveK[random_index1]
-            HQ1_path = self.paths_HQ_FiveK[random_index1]
-            
-            random_index2 = random.randint(0, self.paths_FiveK_len-1)
-            LQ2_path = self.paths_LQ_FiveK[random_index2]
-            HQ2_path = self.paths_HQ_FiveK[random_index2]
-            
-            deg_type = 'FiveK'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-        
-        elif dataset_choice == 'LLF':
-            random_index1 = random.randint(0, self.paths_LLF_len-1)
-            LQ1_path = self.paths_LQ_LLF[random_index1]
-            HQ1_path = self.paths_HQ_LLF[random_index1]
-            
-            random_index2 = random.randint(0, self.paths_LLF_len-1)
-            LQ2_path = self.paths_LQ_LLF[random_index2]
-            HQ2_path = self.paths_HQ_LLF[random_index2]
-            
-            deg_type = 'LLF'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-            
-        elif dataset_choice == 'Rain13K':
-            random_index1 = random.randint(0, self.paths_Rain13K_len-1)
-            LQ1_path = self.paths_LQ_Rain13K[random_index1]
-            HQ1_path = self.paths_HQ_Rain13K[random_index1]
-            
-            random_index2 = random.randint(0, self.paths_Rain13K_len-1)
-            LQ2_path = self.paths_LQ_Rain13K[random_index2]
-            HQ2_path = self.paths_HQ_Rain13K[random_index2]
-            
-            deg_type = 'Rain13K'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-            
-            if self.phase == 'train':
-                # if the image size is too small
-                #print(HQ_size)
-                H, W, _ = img_HQ1.shape
-                #print(H, W)
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_HQ1 = cv2.resize(np.copy(img_HQ1), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_HQ2.shape
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_HQ2 = cv2.resize(np.copy(img_HQ2), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_LQ1.shape
-                #print(H, W)
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_LQ1 = cv2.resize(np.copy(img_LQ1), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_LQ2.shape
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_LQ2 = cv2.resize(np.copy(img_LQ2), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-        
-        elif dataset_choice == 'RealOld':
-            random_index1 = random.randint(0, self.paths_RealOld_len-1)
-            LQ1_path = self.paths_LQ_RealOld[random_index1]
-            HQ1_path = self.paths_HQ_RealOld[random_index1]
-            
-            random_index2 = random.randint(0, self.paths_RealOld_len-1)
-            LQ2_path = self.paths_LQ_RealOld[random_index2]
-            HQ2_path = self.paths_HQ_RealOld[random_index2]
-            
-            deg_type = 'RealOld'
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-            
-            if self.phase == 'train':
-                # if the image size is too small
-                #print(HQ_size)
-                H, W, _ = img_HQ1.shape
-                #print(H, W)
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_HQ1 = cv2.resize(np.copy(img_HQ1), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_HQ2.shape
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_HQ2 = cv2.resize(np.copy(img_HQ2), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_LQ1.shape
-                #print(H, W)
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_LQ1 = cv2.resize(np.copy(img_LQ1), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
-                    
-                H, W, _ = img_LQ2.shape
-                if H < self.HQ_size or W < self.HQ_size:
-                    img_LQ2 = cv2.resize(np.copy(img_LQ2), (self.HQ_size, self.HQ_size),
-                                        interpolation=cv2.INTER_LINEAR)
+    def _get_dataset_name(self):
+        dataset_name = 'sevir'
+        return dataset_name 
+    
+    # def _resize(self, frame_data):
+    #     _, _, H, W = frame_data.shape 
+    #     if H != self.height or W != self.height:
+    #         frame_data = nn.functional.interpolate(frame_data, size=(self.height, self.width), mode='bilinear')
+    #     return frame_data
+    
+    def __getitem__(self, index):
+        file = self.file_list[index]
+        blur_frame_data = self._load_frames(file, type='pred')
+        gt_frame_data = self._load_frames(file, type='tar')
+        random_index = random.randint(0, len(self.file_list)-1)
+        random_file = self.file_list[random_index]
+        context_blur_frame_data = self._load_frames(random_file, type='pred')
+        context_gt_frame_data = self._load_frames(random_file, type='tar')
+
+        packed_results = dict()
+        packed_results['inputs'] = blur_frame_data
+        packed_results['data_samples'] = gt_frame_data
+        packed_results['dataset_name'] = self._get_dataset_name()
+        packed_results['file_name'] = index
+
+        deg_type='dblur'
+
+        if self.split == 'train':
+            img_HQ1 = np.ascontiguousarray(blur_frame_data).float()
+            img_HQ2 = np.ascontiguousarray(gt_frame_data).float()
+            img_LQ1 = np.ascontiguousarray(context_blur_frame_data).float()
+            img_LQ2 = np.ascontiguousarray(context_gt_frame_data).float()
+
+            img_HQ1 = np.repeat(img_HQ1, 2, axis=0)
+            img_LQ1 = np.repeat(img_LQ1, 2, axis=0)
+            img_HQ2 = np.repeat(img_HQ2, 2, axis=0)
+            img_LQ2 = np.repeat(img_LQ2, 2, axis=0)
+
+            input_query_img1 = img_LQ1
+            target_img1 = img_LQ2
+            input_query_img2 = img_HQ1
+            target_img2 = img_HQ2
+
+            # if dataset_choice == 'predict':
+            #     batch = [input_query_img1, target_img1, input_query_img2, target_img2]
+            # else:
+            #     batch = torch.stack([input_query_img1, target_img1, input_query_img2, target_img2], dim=0)
+            batch = [input_query_img1, target_img1, input_query_img2, target_img2]
+
+            return batch, deg_type
         
         else:
-            print('Error! Undefined dataset: {}'.format(dataset_choice))
-            exit()
-        
-        if self.phase == 'train':
-            scale = 1
-            # randomly crop to designed size
-            H1, W1, C = img_LQ1.shape
-            LQ_size = self.HQ_size // scale
-            rnd_h = random.randint(0, max(0, H1 - LQ_size))
-            rnd_w = random.randint(0, max(0, W1 - LQ_size))
-            img_LQ1 = img_LQ1[rnd_h:rnd_h + LQ_size, rnd_w:rnd_w + LQ_size, :]
-            rnd_h_HQ, rnd_w_HQ = int(rnd_h * scale), int(rnd_w * scale)
-            img_HQ1 = img_HQ1[rnd_h_HQ:rnd_h_HQ + self.HQ_size, rnd_w_HQ:rnd_w_HQ + self.HQ_size, :]
+            img_HQ1 = np.ascontiguousarray(blur_frame_data).float()
+            img_HQ2 = np.ascontiguousarray(gt_frame_data).float()
+            img_LQ1 = np.ascontiguousarray(context_blur_frame_data).float()
+            img_LQ2 = np.ascontiguousarray(context_gt_frame_data).float()
+
+            img_HQ1 = np.repeat(img_HQ1, 2, axis=0)
+            img_LQ1 = np.repeat(img_LQ1, 2, axis=0)
+            img_HQ2 = np.repeat(img_HQ2, 2, axis=0)
+            img_LQ2 = np.repeat(img_LQ2, 2, axis=0)
+
+            input_query_img1 = img_LQ1
+            target_img1 = img_LQ2
+            input_query_img2 = img_HQ1
+            target_img2 = img_HQ2
+
+            # batch = torch.stack([input_query_img1, target_img1, input_query_img2, target_img2], dim=0)
             
-            H2, W2, C = img_LQ2.shape
-            LQ_size = self.HQ_size // scale
-            rnd_h = random.randint(0, max(0, H2 - LQ_size))
-            rnd_w = random.randint(0, max(0, W2 - LQ_size))
-            img_LQ2 = img_LQ2[rnd_h:rnd_h + LQ_size, rnd_w:rnd_w + LQ_size, :]
-            rnd_h_HQ, rnd_w_HQ = int(rnd_h * scale), int(rnd_w * scale)
-            img_HQ2 = img_HQ2[rnd_h_HQ:rnd_h_HQ + self.HQ_size, rnd_w_HQ:rnd_w_HQ + self.HQ_size, :]
+            batch = {'input_query_img1': input_query_img1, 'target_img1': target_img1,
+                    'input_query_img2': input_query_img2, 'target_img2': target_img2}
+            
+            return batch, deg_type
 
-            # augmentation - flip, rotate
-            img_LQ1, img_LQ2, img_HQ1, img_HQ2 = util.augment([img_LQ1, img_LQ2, img_HQ1, img_HQ2], hflip=True, rot=True)
-        
-    
-        
-        img_HQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ1, (2, 0, 1)))).float()
-        img_HQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ2, (2, 0, 1)))).float()
-        img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ1, (2, 0, 1)))).float()
-        img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ2, (2, 0, 1)))).float()
-        
-        
-        input_query_img1 = img_LQ1
-        target_img1 = img_HQ1
-        input_query_img2 = img_LQ2
-        target_img2 = img_HQ2
-        
-        batch = torch.stack([input_query_img1, target_img1, input_query_img2, target_img2], dim=0)
 
-        return batch, deg_type
-    
 class DatasetLowlevel_Val(Dataset):
     def __init__(self, dataset_path, input_size=320):
         self.paths_HQ, self.sizes_HQ = util.get_image_paths('img', dataset_path)
@@ -1015,620 +1052,8 @@ class DatasetLowlevel_Val(Dataset):
         batch = {'input_query_img1': input_query_img1, 'target_img1': target_img1,
                  'input_query_img2': input_query_img2, 'target_img2': target_img2}
         return batch, deg_type
-    
-
-class DatasetLowlevel_Mismatched_Val(Dataset):
-    def __init__(self, dataset_path):
-        self.paths_HQ, self.sizes_HQ = util.get_image_paths('img', dataset_path)
 
 
-    def __len__(self):
-        return len(self.paths_HQ)-1
-
-
-    def __getitem__(self, idx):
-        HQ1_path = self.paths_HQ[idx]
-        random_index = random.randint(0, len(self.paths_HQ)-1)
-        HQ2_path = self.paths_HQ[random_index]
-        
-        img_HQ1 = util.read_img(None, HQ1_path, None)
-        img_HQ2 = util.read_img(None, HQ2_path, None)
-        
-        #img_HQ1 = util.modcrop(img_HQ1, 16)
-        #img_HQ2 = util.modcrop(img_HQ2, 16)
-        
-        img_HQ1 = cv2.resize(np.copy(img_HQ1), (256, 256),
-                                    interpolation=cv2.INTER_LINEAR)
-        img_HQ2 = cv2.resize(np.copy(img_HQ2), (256, 256),
-                                    interpolation=cv2.INTER_LINEAR)
-        
-        if img_HQ1.ndim == 2:
-            img_HQ1 = np.expand_dims(img_HQ1, axis=2)
-            img_HQ1 = np.concatenate((img_HQ1, img_HQ1, img_HQ1), axis=2)
-        if img_HQ2.ndim == 2:
-            img_HQ2 = np.expand_dims(img_HQ2, axis=2)
-            img_HQ2 = np.concatenate((img_HQ2, img_HQ2, img_HQ2), axis=2)
-            
-        if img_HQ1.shape[2] !=3:
-            img_HQ1 = np.concatenate((img_HQ1, img_HQ1, img_HQ1), axis=2)
-        if img_HQ2.shape[2] !=3:
-            img_HQ2 = np.concatenate((img_HQ2, img_HQ2, img_HQ2), axis=2)
-        
-        # add degradation to HQ
-        degradation_type_list = ['GaussianNoise', 'GaussianBlur', 'JPEG', 'Resize', 
-                                 'Rain', 'SPNoise', 'LowLight', 'PoissonNoise', 'Ringing',
-                                 'r_l', 'Inpainting']
-        prompt_deg_type = random.choice(degradation_type_list)
-        if prompt_deg_type == 'GaussianNoise':
-            level = random.uniform(10, 50)
-            img_LQ1 = add_Gaussian_noise(img_HQ1.copy(), level=level)
-        elif prompt_deg_type == 'GaussianBlur':
-            sigma = random.uniform(1, 4)
-            img_LQ1 = iso_GaussianBlur(img_HQ1.copy(), window=15, sigma=sigma)
-        elif prompt_deg_type == 'JPEG':
-            level = random.randint(20, 95)
-            img_LQ1 = add_JPEG_noise(img_HQ1.copy(), level=level)
-        elif prompt_deg_type == 'Resize':
-            img_LQ1 = add_resize(img_HQ1.copy())
-        elif prompt_deg_type == 'Rain':
-            value = random.uniform(40, 200)
-            img_LQ1 = add_rain(img_HQ1.copy(), value=value)
-        elif prompt_deg_type == 'SPNoise':
-            img_LQ1 = add_sp_noise(img_HQ1.copy())
-        elif prompt_deg_type == 'LowLight':
-            lum_scale = random.uniform(0.1, 0.6)
-            img_LQ1 = low_light(img_HQ1.copy(), lum_scale=lum_scale)
-        elif prompt_deg_type == 'PoissonNoise':
-            img_LQ1 = add_Poisson_noise(img_HQ1.copy(), level=2)
-        elif prompt_deg_type == 'Ringing':
-            img_LQ1 = add_ringing(img_HQ1.copy())
-        elif prompt_deg_type == 'r_l':
-            img_LQ1 = r_l(img_HQ1.copy())
-        elif prompt_deg_type == 'Inpainting':
-            l_num = random.randint(5, 10)
-            l_thick = random.randint(5, 10)
-            img_LQ1 = inpainting(img_HQ1.copy(), l_num=l_num, l_thick=l_thick)
-        else:
-            print('Error!')
-            exit()
-       
-        test_deg_type = random.choice(degradation_type_list)
-        if test_deg_type == 'GaussianNoise':
-            level = random.uniform(10, 50)
-            img_LQ2 = add_Gaussian_noise(img_HQ2.copy(), level=level)
-        elif test_deg_type == 'GaussianBlur':
-            sigma = random.uniform(1, 4)
-            img_LQ2 = iso_GaussianBlur(img_HQ2.copy(), window=15, sigma=sigma)
-        elif test_deg_type == 'JPEG':
-            level = random.randint(20, 95)
-            img_LQ2 = add_JPEG_noise(img_HQ2.copy(), level=level)
-        elif test_deg_type == 'Resize':
-            img_LQ2 = add_resize(img_HQ2.copy())
-        elif test_deg_type == 'Rain':
-            value = random.uniform(40, 200)
-            img_LQ2 = add_rain(img_HQ2.copy(), value=value)
-        elif test_deg_type == 'SPNoise':
-            img_LQ2 = add_sp_noise(img_HQ2.copy())
-        elif test_deg_type == 'LowLight':
-            lum_scale = random.uniform(0.1, 0.6)
-            img_LQ2 = low_light(img_HQ2.copy(), lum_scale=lum_scale)
-        elif test_deg_type == 'PoissonNoise':
-            img_LQ2 = add_Poisson_noise(img_HQ2.copy(), level=2)
-        elif test_deg_type == 'Ringing':
-            img_LQ2 = add_ringing(img_HQ2.copy())
-        elif test_deg_type == 'r_l':
-            img_LQ2 = r_l(img_HQ2.copy())
-        elif test_deg_type == 'Inpainting':
-            l_num = random.randint(5, 10)
-            l_thick = random.randint(5, 10)
-            img_LQ2 = inpainting(img_HQ2.copy(), l_num=l_num, l_thick=l_thick)
-        else:
-            print('Error!')
-            exit()
-        
-        # print(HQ1_path)
-        # print(HQ2_path) 
-        # print(deg_type)
-        # print(img_HQ1.shape)
-        # print(img_LQ1.shape)
-        # print(img_HQ2.shape)
-        # print(img_LQ2.shape)
-        
-        # BGR to RGB, HWC to CHW, numpy to tensor
-        # if img_HQ1.shape[2] == 3:
-        #     img_HQ1 = img_HQ1[:, :, [2, 1, 0]]
-        #     img_HQ2 = img_HQ2[:, :, [2, 1, 0]]
-        #     img_LQ1 = img_LQ1[:, :, [2, 1, 0]]
-        #     img_LQ2 = img_LQ2[:, :, [2, 1, 0]]
-        
-        img_HQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ1, (2, 0, 1)))).float()
-        img_HQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ2, (2, 0, 1)))).float()
-        img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ1, (2, 0, 1)))).float()
-        img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ2, (2, 0, 1)))).float()
-        
-        
-        input_query_img1 = img_LQ1
-        target_img1 = img_HQ1
-        input_query_img2 = img_LQ2
-        target_img2 = img_HQ2
-        
-        batch = {'input_query_img1': input_query_img1, 'target_img1': target_img1,
-                 'input_query_img2': input_query_img2, 'target_img2': target_img2}
-        return batch, prompt_deg_type, test_deg_type
-    
-class DatasetLowlevel_Mix_Val(Dataset):
-    def __init__(self, dataset_path):
-        self.paths_HQ, self.sizes_HQ = util.get_image_paths('img', dataset_path)
-
-
-    def __len__(self):
-        return len(self.paths_HQ)-1
-
-
-    def __getitem__(self, idx):
-        HQ1_path = self.paths_HQ[idx]
-        random_index = random.randint(0, len(self.paths_HQ)-1)
-        HQ2_path = self.paths_HQ[random_index]
-        
-        img_HQ1 = util.read_img(None, HQ1_path, None)
-        img_HQ2 = util.read_img(None, HQ2_path, None)
-        
-        #img_HQ1 = util.modcrop(img_HQ1, 16)
-        #img_HQ2 = util.modcrop(img_HQ2, 16)
-        
-        img_HQ1 = cv2.resize(np.copy(img_HQ1), (256, 256),
-                                    interpolation=cv2.INTER_LINEAR)
-        img_HQ2 = cv2.resize(np.copy(img_HQ2), (256, 256),
-                                    interpolation=cv2.INTER_LINEAR)
-        
-        if img_HQ1.ndim == 2:
-            img_HQ1 = np.expand_dims(img_HQ1, axis=2)
-            img_HQ1 = np.concatenate((img_HQ1, img_HQ1, img_HQ1), axis=2)
-        if img_HQ2.ndim == 2:
-            img_HQ2 = np.expand_dims(img_HQ2, axis=2)
-            img_HQ2 = np.concatenate((img_HQ2, img_HQ2, img_HQ2), axis=2)
-            
-        if img_HQ1.shape[2] !=3:
-            img_HQ1 = np.concatenate((img_HQ1, img_HQ1, img_HQ1), axis=2)
-        if img_HQ2.shape[2] !=3:
-            img_HQ2 = np.concatenate((img_HQ2, img_HQ2, img_HQ2), axis=2)
-        
-        # add degradation to HQ
-        degradation_type_list = ['GaussianBlur+GaussianNoise', 'GaussianBlur+SPNoise', 'GaussianBlur+LowLight', 
-                                 'GaussianBlur+Rain',  'Ringing+GaussianNoise',
-                                 'r_l+GaussianNoise', 'GaussianNoise+Inpainting']
-        deg_type = random.choice(degradation_type_list)
-        if deg_type == 'GaussianBlur+GaussianNoise':
-            sigma = random.uniform(1, 4)
-            img_LQ1 = iso_GaussianBlur(img_HQ1.copy(), window=15, sigma=sigma)
-            img_LQ2 = iso_GaussianBlur(img_HQ2.copy(), window=15, sigma=sigma)
-            level = random.uniform(10, 50)
-            img_LQ1 = add_Gaussian_noise(img_LQ1.copy(), level=level)
-            img_LQ2 = add_Gaussian_noise(img_LQ2.copy(), level=level)
-        elif deg_type == 'GaussianBlur+SPNoise':
-            sigma = random.uniform(1, 4)
-            img_LQ1 = iso_GaussianBlur(img_HQ1.copy(), window=15, sigma=sigma)
-            img_LQ2 = iso_GaussianBlur(img_HQ2.copy(), window=15, sigma=sigma)
-            img_LQ1 = add_sp_noise(img_LQ1.copy())
-            img_LQ2 = add_sp_noise(img_LQ2.copy())
-        elif deg_type == 'GaussianBlur+Rain':
-            sigma = random.uniform(1, 4)
-            img_LQ1 = iso_GaussianBlur(img_HQ1.copy(), window=15, sigma=sigma)
-            img_LQ2 = iso_GaussianBlur(img_HQ2.copy(), window=15, sigma=sigma)
-            value = random.uniform(40, 200)
-            img_LQ1 = add_rain(img_LQ1.copy(), value=value)
-            img_LQ2 = add_rain(img_LQ2.copy(), value=value)
-        elif deg_type == 'SPNoise':
-            img_LQ1 = add_sp_noise(img_HQ1.copy())
-            img_LQ2 = add_sp_noise(img_HQ2.copy())
-        elif deg_type == 'GaussianBlur+LowLight':
-            sigma = random.uniform(1, 4)
-            img_LQ1 = iso_GaussianBlur(img_HQ1.copy(), window=15, sigma=sigma)
-            img_LQ2 = iso_GaussianBlur(img_HQ2.copy(), window=15, sigma=sigma)
-            lum_scale = random.uniform(0.1, 0.6)
-            img_LQ1 = low_light(img_LQ1.copy(), lum_scale=lum_scale)
-            img_LQ2 = low_light(img_LQ2.copy(), lum_scale=lum_scale)
-        elif deg_type == 'PoissonNoise':
-            img_LQ1 = add_Poisson_noise(img_HQ1.copy(), level=2)
-            img_LQ2 = add_Poisson_noise(img_HQ2.copy(), level=2)
-        elif deg_type == 'Ringing+GaussianNoise':
-            img_LQ1 = add_ringing(img_HQ1.copy())
-            img_LQ2 = add_ringing(img_HQ2.copy())
-            level = random.uniform(10, 50)
-            img_LQ1 = add_Gaussian_noise(img_LQ1.copy(), level=level)
-            img_LQ2 = add_Gaussian_noise(img_LQ2.copy(), level=level)
-        elif deg_type == 'r_l+GaussianNoise':
-            img_LQ1 = r_l(img_HQ1.copy())
-            img_LQ2 = r_l(img_HQ2.copy())
-            level = random.uniform(10, 50)
-            img_LQ1 = add_Gaussian_noise(img_LQ1.copy(), level=level)
-            img_LQ2 = add_Gaussian_noise(img_LQ2.copy(), level=level)
-        elif deg_type == 'GaussianNoise+Inpainting':
-            level = random.uniform(10, 50)
-            img_LQ1 = add_Gaussian_noise(img_HQ1.copy(), level=level)
-            img_LQ2 = add_Gaussian_noise(img_HQ2.copy(), level=level)
-            l_num = random.randint(5, 10)
-            l_thick = random.randint(5, 10)
-            img_LQ1 = inpainting(img_LQ1.copy(), l_num=l_num, l_thick=l_thick)
-            img_LQ2 = inpainting(img_LQ2.copy(), l_num=l_num, l_thick=l_thick)
-        else:
-            print('Error!')
-            exit()
-       
-        
-        
-        # print(HQ1_path)
-        # print(HQ2_path) 
-        # print(deg_type)
-        # print(img_HQ1.shape)
-        # print(img_LQ1.shape)
-        # print(img_HQ2.shape)
-        # print(img_LQ2.shape)
-        
-        # BGR to RGB, HWC to CHW, numpy to tensor
-        # if img_HQ1.shape[2] == 3:
-        #     img_HQ1 = img_HQ1[:, :, [2, 1, 0]]
-        #     img_HQ2 = img_HQ2[:, :, [2, 1, 0]]
-        #     img_LQ1 = img_LQ1[:, :, [2, 1, 0]]
-        #     img_LQ2 = img_LQ2[:, :, [2, 1, 0]]
-        
-        img_HQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ1, (2, 0, 1)))).float()
-        img_HQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ2, (2, 0, 1)))).float()
-        img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ1, (2, 0, 1)))).float()
-        img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ2, (2, 0, 1)))).float()
-        
-        
-        input_query_img1 = img_LQ1
-        target_img1 = img_HQ1
-        input_query_img2 = img_LQ2
-        target_img2 = img_HQ2
-        
-        batch = {'input_query_img1': input_query_img1, 'target_img1': target_img1,
-                 'input_query_img2': input_query_img2, 'target_img2': target_img2}
-        return batch, deg_type
-    
-class DatasetLowlevel_Customized_Val(Dataset):
-    def __init__(self, dataset_path_HQ, dataset_path_LQ, dataset_type='SOTS', data_len=None):
-        self.paths_HQ, self.sizes_HQ = util.get_image_paths('img', dataset_path_HQ)
-        self.paths_LQ, self.sizes_LQ = util.get_image_paths('img', dataset_path_LQ)
-        self.dataset_path_HQ = dataset_path_HQ
-        self.dataset_path_LQ = dataset_path_LQ
-        sorted(self.paths_HQ)
-        sorted(self.paths_LQ)
-        self.dataset_type = dataset_type
-        self.data_len = data_len
-        
-        if self.data_len is not None:
-            self.paths_HQ = self.paths_HQ[0:self.data_len]
-            self.paths_LQ = self.paths_LQ[0:self.data_len]
-
-    def __len__(self):
-        
-        return len(self.paths_LQ)
-
-
-    def __getitem__(self, idx):
-        if self.dataset_type == 'SOTS':
-            LQ1_path = self.paths_LQ[idx]
-            HQ1_name = LQ1_path.split('/')[-1].split('_')[0]
-            HQ1_path = os.path.join(self.dataset_path_HQ, '{}.png'.format(HQ1_name))
-            
-            random_index = random.randint(0, len(self.paths_HQ)-1)
-            LQ2_path = self.paths_LQ[random_index]
-            HQ2_name = LQ2_path.split('/')[-1].split('_')[0]
-            HQ2_path = os.path.join(self.dataset_path_HQ, '{}.png'.format(HQ2_name))
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-            
-            H_GT, W_GT, _ = img_HQ1.shape
-            H_LQ, W_LQ, _ = img_LQ1.shape
-            
-            crop_size_H = np.abs(H_LQ-H_GT)//2
-            crop_size_W = np.abs(W_LQ-W_GT)//2
-            img_HQ1 = img_HQ1[crop_size_H:-crop_size_H, crop_size_W:-crop_size_W, :]
-            img_HQ2 = img_HQ2[crop_size_H:-crop_size_H, crop_size_W:-crop_size_W, :]
-        else:
-            random_index = random.randint(0, len(self.paths_HQ)-1)
-            HQ1_path = self.paths_HQ[random_index]
-            LQ1_path = self.paths_LQ[random_index]
-            
-            HQ2_path = self.paths_HQ[idx]
-            LQ2_path = self.paths_LQ[idx]
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-        
-        
-        deg_type = self.dataset_type
-        #img_HQ1 = util.modcrop(img_HQ1, 16)
-        #img_HQ2 = util.modcrop(img_HQ2, 16)
-        
-        img_HQ1 = cv2.resize(np.copy(img_HQ1), (256, 256),
-                                    interpolation=cv2.INTER_LINEAR)
-        img_LQ1 = cv2.resize(np.copy(img_LQ1), (256, 256),
-                                    interpolation=cv2.INTER_LINEAR)
-        img_HQ2 = cv2.resize(np.copy(img_HQ2), (256, 256),
-                                    interpolation=cv2.INTER_LINEAR)
-        img_LQ2 = cv2.resize(np.copy(img_LQ2), (256, 256),
-                                    interpolation=cv2.INTER_LINEAR)
-        
-        if img_HQ1.ndim == 2:
-            img_HQ1 = np.expand_dims(img_HQ1, axis=2)
-            img_HQ1 = np.concatenate((img_HQ1, img_HQ1, img_HQ1), axis=2)
-        if img_HQ2.ndim == 2:
-            img_HQ2 = np.expand_dims(img_HQ2, axis=2)
-            img_HQ2 = np.concatenate((img_HQ2, img_HQ2, img_HQ2), axis=2)
-            
-        if img_HQ1.shape[2] !=3:
-            img_HQ1 = np.concatenate((img_HQ1, img_HQ1, img_HQ1), axis=2)
-        if img_HQ2.shape[2] !=3:
-            img_HQ2 = np.concatenate((img_HQ2, img_HQ2, img_HQ2), axis=2)
-        
-        
-        
-        img_HQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ1, (2, 0, 1)))).float()
-        img_HQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ2, (2, 0, 1)))).float()
-        img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ1, (2, 0, 1)))).float()
-        img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ2, (2, 0, 1)))).float()
-        
-        
-        input_query_img1 = img_LQ1
-        target_img1 = img_HQ1
-        input_query_img2 = img_LQ2
-        target_img2 = img_HQ2
-        
-        batch = {'input_query_img1': input_query_img1, 'target_img1': target_img1,
-                 'input_query_img2': input_query_img2, 'target_img2': target_img2,
-                 'input_query_img2_path': LQ2_path}
-        return batch, deg_type
-
-class DatasetLowlevel_Customized_Val_original_size(Dataset):
-    def __init__(self, dataset_path_HQ, dataset_path_LQ, dataset_type='SOTS', data_len=None, prompt_id=-1):
-        self.paths_HQ, self.sizes_HQ = util.get_image_paths('img', dataset_path_HQ)
-        self.paths_LQ, self.sizes_LQ = util.get_image_paths('img', dataset_path_LQ)
-        self.dataset_path_HQ = dataset_path_HQ
-        self.dataset_path_LQ = dataset_path_LQ
-        sorted(self.paths_HQ)
-        sorted(self.paths_LQ)
-        self.dataset_type = dataset_type
-        self.data_len = data_len
-        self.prompt_id = prompt_id
-        
-        print(self.prompt_id, self.paths_LQ[self.prompt_id])
-        
-        if self.data_len is not None:
-            self.paths_HQ = self.paths_HQ[0:self.data_len]
-            self.paths_LQ = self.paths_LQ[0:self.data_len]
-
-    def __len__(self):
-        
-        return len(self.paths_LQ)
-
-
-    def __getitem__(self, idx):
-        if self.dataset_type == 'SOTS':
-            if self.prompt_id == -1:
-                random_index = random.randint(0, len(self.paths_LQ)-1)
-                LQ1_path = self.paths_LQ[random_index]
-            else:
-                LQ1_path = self.paths_LQ[self.prompt_id]
-            
-            
-            HQ1_name = LQ1_path.split('/')[-1].split('_')[0]
-            HQ1_path = os.path.join(self.dataset_path_HQ, '{}.png'.format(HQ1_name))
-            
-            LQ2_path = self.paths_LQ[idx]
-            HQ2_name = LQ2_path.split('/')[-1].split('_')[0]
-            HQ2_path = os.path.join(self.dataset_path_HQ, '{}.png'.format(HQ2_name))
-            
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-            
-            H_GT, W_GT, _ = img_HQ1.shape
-            H_LQ, W_LQ, _ = img_LQ1.shape
-            
-            if H_GT != H_LQ or W_GT != W_LQ:
-                crop_size_H = np.abs(H_LQ-H_GT)//2
-                crop_size_W = np.abs(W_LQ-W_GT)//2
-                img_HQ1 = img_HQ1[crop_size_H:-crop_size_H, crop_size_W:-crop_size_W, :]
-                img_HQ2 = img_HQ2[crop_size_H:-crop_size_H, crop_size_W:-crop_size_W, :]
-        else:
-            if self.prompt_id == -1:
-                random_index = random.randint(0, len(self.paths_HQ)-1)
-                HQ1_path = self.paths_HQ[random_index]
-                LQ1_path = self.paths_LQ[random_index]
-            else:
-                
-                HQ1_path = self.paths_HQ[self.prompt_id]
-                LQ1_path = self.paths_LQ[self.prompt_id]
-                
-                # print(self.prompt_id, HQ1_path)
-                # print(self.prompt_id, LQ1_path)
-            
-            HQ2_path = self.paths_HQ[idx]
-            LQ2_path = self.paths_LQ[idx]
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-        
-        
-        deg_type = self.dataset_type
-        #img_HQ1 = util.modcrop(img_HQ1, 16)
-        #img_HQ2 = util.modcrop(img_HQ2, 16)
-        
-        # img_size = 320
-        # img_HQ1 = cv2.resize(np.copy(img_HQ1), (img_size, img_size),
-        #                             interpolation=cv2.INTER_LINEAR)
-        # img_LQ1 = cv2.resize(np.copy(img_LQ1), (img_size, img_size),
-        #                             interpolation=cv2.INTER_LINEAR)
-        # img_HQ2 = cv2.resize(np.copy(img_HQ2), (img_size, img_size),
-        #                             interpolation=cv2.INTER_LINEAR)
-        # img_LQ2 = cv2.resize(np.copy(img_LQ2), (img_size, img_size),
-        #                             interpolation=cv2.INTER_LINEAR)
-        
-        if img_HQ1.ndim == 2:
-            img_HQ1 = np.expand_dims(img_HQ1, axis=2)
-            img_HQ1 = np.concatenate((img_HQ1, img_HQ1, img_HQ1), axis=2)
-        if img_HQ2.ndim == 2:
-            img_HQ2 = np.expand_dims(img_HQ2, axis=2)
-            img_HQ2 = np.concatenate((img_HQ2, img_HQ2, img_HQ2), axis=2)
-            
-        if img_HQ1.shape[2] !=3:
-            img_HQ1 = np.concatenate((img_HQ1, img_HQ1, img_HQ1), axis=2)
-        if img_HQ2.shape[2] !=3:
-            img_HQ2 = np.concatenate((img_HQ2, img_HQ2, img_HQ2), axis=2)
-        
-        
-        
-        img_HQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ1, (2, 0, 1)))).float()
-        img_HQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ2, (2, 0, 1)))).float()
-        img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ1, (2, 0, 1)))).float()
-        img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ2, (2, 0, 1)))).float()
-        
-        
-        input_query_img1 = img_LQ1
-        target_img1 = img_HQ1
-        input_query_img2 = img_LQ2
-        target_img2 = img_HQ2
-        
-        batch = {'input_query_img1': input_query_img1, 'target_img1': target_img1,
-                 'input_query_img2': input_query_img2, 'target_img2': target_img2,
-                 'input_query_img2_path': LQ2_path}
-        return batch, deg_type
-    
-class DatasetLowlevel_Customized_Test(Dataset):
-    def __init__(self, dataset_path_HQ, dataset_path_LQ, dataset_type='SOTS'):
-        self.paths_HQ, self.sizes_HQ = util.get_image_paths('img', dataset_path_HQ)
-        self.paths_LQ, self.sizes_LQ = util.get_image_paths('img', dataset_path_LQ)
-        self.dataset_path_HQ = dataset_path_HQ
-        self.dataset_path_LQ = dataset_path_LQ
-        sorted(self.paths_HQ)
-        sorted(self.paths_LQ)
-        self.dataset_type = dataset_type
-
-    def __len__(self):
-        return len(self.paths_LQ)
-
-
-    def __getitem__(self, idx):
-        if self.dataset_type == 'SOTS':
-            random_index = random.randint(0, len(self.paths_HQ)-1)
-            LQ1_path = self.paths_LQ[random_index]
-            HQ1_name = LQ1_path.split('/')[-1].split('_')[0]
-            HQ1_path = os.path.join(self.dataset_path_HQ, '{}.png'.format(HQ1_name))
-            
-            
-            LQ2_path = self.paths_LQ[idx]
-            HQ2_name = LQ2_path.split('/')[-1].split('_')[0]
-            HQ2_path = os.path.join(self.dataset_path_HQ, '{}.png'.format(HQ2_name))
-            
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-            
-            H_GT, W_GT, _ = img_HQ1.shape
-            H_LQ, W_LQ, _ = img_LQ1.shape
-            
-            crop_size_H = np.abs(H_LQ-H_GT)//2
-            crop_size_W = np.abs(W_LQ-W_GT)//2
-            img_HQ1 = img_HQ1[crop_size_H:-crop_size_H, crop_size_W:-crop_size_W, :]
-            img_HQ2 = img_HQ2[crop_size_H:-crop_size_H, crop_size_W:-crop_size_W, :]
-        
-        elif self.dataset_type == 'Syn':
-            HQ1_path = self.paths_HQ[2]
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            
-            # add degradation to HQ
-            degradation_type_list = ['GaussianNoise', 'GaussianBlur', 'JPEG', 'Resize', 
-                                    'Rain', 'SPNoise', 'LowLight', 'PoissonNoise', 'Ringing',
-                                    'r_l', 'Inpainting']
-            deg_type = 'Inpainting'
-            if deg_type == 'GaussianNoise':
-                level = 50
-                img_LQ1 = add_Gaussian_noise(img_HQ1.copy(), level=level)
-            elif deg_type == 'GaussianBlur':
-                sigma = 3.2739
-                img_LQ1 = iso_GaussianBlur(img_HQ1.copy(), window=15, sigma=sigma)
-            elif deg_type == 'JPEG':
-                level = random.randint(20, 95)
-                img_LQ1 = add_JPEG_noise(img_HQ1.copy(), level=level)
-            elif deg_type == 'Resize':
-                img_LQ1 = add_resize(img_HQ1.copy())
-            elif deg_type == 'Rain':
-                value = 100
-                img_LQ1 = add_rain(img_HQ1.copy(), value=value)
-            elif deg_type == 'SPNoise':
-                img_LQ1 = add_sp_noise(img_HQ1.copy())
-            elif deg_type == 'LowLight':
-                lum_scale = 0.3
-                img_LQ1 = low_light(img_HQ1.copy(), lum_scale=lum_scale)
-            elif deg_type == 'PoissonNoise':
-                img_LQ1 = add_Poisson_noise(img_HQ1.copy(), level=2)
-            elif deg_type == 'Ringing':
-                img_LQ1 = add_ringing(img_HQ1.copy())
-            elif deg_type == 'r_l':
-                img_LQ1 = r_l(img_HQ1.copy())
-            elif deg_type == 'Inpainting':
-                l_num = random.randint(5, 10)
-                l_thick = random.randint(5, 10)
-                img_LQ1 = inpainting(img_HQ1.copy(), l_num=l_num, l_thick=l_thick)
-            else:
-                print('Error!')
-                exit()
-            
-            
-            HQ2_path = self.paths_HQ[idx]
-            LQ2_path = self.paths_LQ[idx]
-            
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-        
-        else:
-            HQ1_path = self.paths_HQ[idx]
-            LQ1_path = self.paths_LQ[idx]
-            random_index = random.randint(0, len(self.paths_HQ)-1)
-            HQ2_path = self.paths_HQ[random_index]
-            LQ2_path = self.paths_LQ[random_index]
-            img_HQ1 = util.read_img(None, HQ1_path, None)
-            img_LQ1 = util.read_img(None, LQ1_path, None) 
-            img_HQ2 = util.read_img(None, HQ2_path, None)
-            img_LQ2 = util.read_img(None, LQ2_path, None)
-        
-        
-        deg_type = self.dataset_type
-        #img_HQ1 = util.modcrop(img_HQ1, 16)
-        #img_HQ2 = util.modcrop(img_HQ2, 16)
-        
-
-        
-        
-        
-        img_HQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ1, (2, 0, 1)))).float()
-        img_HQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_HQ2, (2, 0, 1)))).float()
-        img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ1, (2, 0, 1)))).float()
-        img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(img_LQ2, (2, 0, 1)))).float()
-        
-        
-        input_query_img1 = img_LQ1
-        target_img1 = img_HQ1
-        input_query_img2 = img_LQ2
-        target_img2 = img_HQ2
-        
-        batch = {'input_query_img1': input_query_img1, 'target_img1': target_img1,
-                 'input_query_img2': input_query_img2, 'target_img2': target_img2}
-        return batch, deg_type
-    
-    
-class DatasetLowlevel_Customized_Test_DirectLoad_Triplet(Dataset):
     def __init__(self, dataset_path_root):
         self.dataset_path_root = dataset_path_root
         self.dataset_paths = os.listdir(self.dataset_path_root)

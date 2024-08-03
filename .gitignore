@@ -1,2 +1,5 @@
 pretrained_models/PromptGIP-checkpoint.pth
 results/
+experiments/
+data/
+3794432-STEAD.EarlyWarning.out

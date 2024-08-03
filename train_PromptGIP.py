@@ -15,8 +15,13 @@ import util.misc as misc
 from util.misc import NativeScalerWithGradNormCount as NativeScaler
 import models_mae_PromptGIP_CNN_Head
 from engine_pretrain import train_one_epoch
+from dataset.data_utiles import load_config
 import dataset.lowlevel_PromtGIP_dataloader as lowlevel_prompt_dataloader
 from evaluation_prompt import *
+
+from petrel_client.client import Client
+
+client = Client(conf_path="~/petreloss.conf")
 
 
 def get_args_parser():
@@ -25,7 +30,7 @@ def get_args_parser():
     parser.add_argument('--batch_size', default=64, type=int,
                         help='Batch size per GPU (effective batch size is batch_size * accum_iter * # gpus')
     parser.add_argument('--epochs', default=400, type=int)
-    parser.add_argument('--accum_iter', default=1, type=int,
+    parser.add_argument('--accum_iter', default=4, type=int,
                         help='Accumulate gradient iterations (for increasing the effective batch size under memory constraints)')
 
     # Model parameters
@@ -48,7 +53,7 @@ def get_args_parser():
                         help='learning rate (absolute lr)')
     parser.add_argument('--blr', type=float, default=1e-3, metavar='LR',
                         help='base learning rate: absolute_lr = base_lr * total_batch_size / 256')
-    parser.add_argument('--min_lr', type=float, default=0., metavar='LR',
+    parser.add_argument('--min_lr', type=float, default=1e-5, metavar='LR',
                         help='lower lr bound for cyclic schedulers that hit 0')
 
     parser.add_argument('--warmup_epochs', type=int, default=40, metavar='N',
@@ -77,7 +82,7 @@ def get_args_parser():
 
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
-    parser.add_argument('--num_workers', default=10, type=int)
+    parser.add_argument('--num_workers', default=1, type=int)
     parser.add_argument('--pin_mem', action='store_true',
                         help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no_pin_mem', action='store_false', dest='pin_mem')
@@ -110,69 +115,51 @@ def main(args):
 
     cudnn.benchmark = True
 
-    ITS_path = '/nvme/liuyihao/DATA/Dehaze/ITS'
-    LOL_path = '/nvme/liuyihao/DATA/LOLdataset/our485'
-    Rain13K_path = '/nvme/liuyihao/DATA/Derain/train/Rain13K'
-    FiveK_path = '/nvme/liuyihao/DATA/MIT-fivek'
-    LLF_path = '/nvme/liuyihao/DATA/MIT-fivek'
+    config = load_config("./config/xrestormer.yaml")
+    # 2 channels dataset
+    dataset_train1 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='sevir',input_size=args.input_size,
+                                                                   phase='train',task='sevir')
+    dataset_train2 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='ir_trans',input_size=args.input_size,
+                                                                   phase='train',task='trans')
+    dataset_train3 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='inter',input_size=args.input_size,
+                                                                   phase='train',task='inter')
+    dataset_train4 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='down_scaling_vil',input_size=args.input_size,
+                                                                   phase='train',task='down_scaling')
+    # 4 channels dataset
+    dataset_train_4c = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='predict',input_size=args.input_size,
+                                                                   phase = 'train',task='predict')
 
-    dataset_train = lowlevel_prompt_dataloader.DatasetLowlevel_Train(dataset_path=args.data_path, 
-                                                                     input_size=args.input_size,
-                                                                     phase = 'train',
-                                                                     ITS_path=ITS_path, 
-                                                                     LOL_path=LOL_path,
-                                                                     Rain13K_path=Rain13K_path,
-                                                                     FiveK_path=FiveK_path,
-                                                                     LLF_path=LLF_path
-                                                                     )
+    dataset_train_2c = dataset_train1+dataset_train2+dataset_train3+dataset_train4
+    print(dataset_train_2c.__len__())
+    # dataset_train_2c = dataset_train_4c
+    print(dataset_train_4c.__len__())
     
-    dataset_val = lowlevel_prompt_dataloader.DatasetLowlevel_Val(dataset_path=args.data_path_val,
-                                                                 input_size=args.input_size)
-    
-    dataset_path_HQ_SOTS = '/nvme/liuyihao/DATA/Dehaze/SOTS/indoor/nyuhaze500/gt'
-    dataset_path_LQ_SOTS = '/nvme/liuyihao/DATA/Dehaze/SOTS/indoor/nyuhaze500/hazy'
-    dataset_val_SOTS = lowlevel_prompt_dataloader.DatasetLowlevel_Customized_Val(dataset_path_HQ=dataset_path_HQ_SOTS, 
-                                                                                 dataset_path_LQ=dataset_path_LQ_SOTS, 
-                                                                                 dataset_type='SOTS',
-                                                                                 data_len=100)
-    
-    dataset_path_HQ_LOL = '/nvme/liuyihao/DATA/LOLdataset/eval15/high'
-    dataset_path_LQ_LOL = '/nvme/liuyihao/DATA/LOLdataset/eval15/low'
-    dataset_val_LOL = lowlevel_prompt_dataloader.DatasetLowlevel_Customized_Val(dataset_path_HQ=dataset_path_HQ_LOL, 
-                                                                                dataset_path_LQ=dataset_path_LQ_LOL, 
-                                                                                dataset_type='LOL',
-                                                                                data_len=100)
-
-    dataset_path_HQ_Test100 = '/nvme/liuyihao/DATA/Derain/test/Test100/target'
-    dataset_path_LQ_Test100 = '/nvme/liuyihao/DATA/Derain/test/Test100/input'
-    dataset_val_Test100 = lowlevel_prompt_dataloader.DatasetLowlevel_Customized_Val(dataset_path_HQ=dataset_path_HQ_Test100, 
-                                                                                dataset_path_LQ=dataset_path_LQ_Test100, 
-                                                                                dataset_type='Test100',
-                                                                                data_len=100)
-    
-    
-    dataset_path_HQ_LLF = '/nvme/liuyihao/DATA/MIT-fivek/expert_C_LLF_GT_test'
-    dataset_path_LQ_LLF = '/nvme/liuyihao/DATA/MIT-fivek/expert_C_test'
-    dataset_val_LLF = lowlevel_prompt_dataloader.DatasetLowlevel_Customized_Val(dataset_path_HQ=dataset_path_HQ_LLF, 
-                                                                                dataset_path_LQ=dataset_path_LQ_LLF, 
-                                                                                dataset_type='LLF',
-                                                                                data_len=100)
+    dataset_val1 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='sevir',input_size=args.input_size,
+                                                                 phase='val',task='sevir')
+    dataset_val2 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='ir_trans',input_size=args.input_size,
+                                                                 phase='val',task='trans')
+    dataset_val3 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='inter',input_size=args.input_size,
+                                                                 phase='val',task='inter')
+    dataset_val4 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='down_scaling_vil',input_size=args.input_size,
+                                                                 phase='val',task='down_scaling')
+    dataset_val5 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='predict',input_size=args.input_size,
+                                                                 phase='val',task='predict')   
+    print(dataset_val1.__len__())
 
     # single | mix | mismatch_single | UDC_Toled | UDC_Poled | Rain100L | Rain100H | Test100 | Test1200
     # SOTS | mismatch_mix
-    test_folder = 'single' 
-    data_path = os.path.join('/home/liuyihao/visual_prompting/prompt_generalization_testset_256', test_folder)
+    test_folder = 'input' 
+    data_path = os.path.join('/mnt/petrelfs/zhaoxiangyu1/data/Test100_256', test_folder)
     dataset_val_single = lowlevel_prompt_dataloader.DatasetLowlevel_Customized_Test_DirectLoad_Triplet(data_path)
-    
-    test_folder = 'mix' 
-    data_path = os.path.join('/home/liuyihao/visual_prompting/prompt_generalization_testset_256', test_folder)
-    dataset_val_mix = lowlevel_prompt_dataloader.DatasetLowlevel_Customized_Test_DirectLoad_Triplet(data_path)
     
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()
         global_rank = misc.get_rank()
         sampler_train = torch.utils.data.DistributedSampler(
-            dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True
+            dataset_train_2c, num_replicas=num_tasks, rank=global_rank, shuffle=True
+        )
+        sampler_train_4c = torch.utils.data.DistributedSampler(
+            dataset_train_4c, num_replicas=num_tasks, rank=global_rank, shuffle=True
         )
         print("Sampler_train = %s" % str(sampler_train))
     else:
@@ -181,66 +168,57 @@ def main(args):
     log_writer = None
 
     data_loader_train = torch.utils.data.DataLoader(
-        dataset_train, sampler=sampler_train,
+        dataset_train_2c, sampler=sampler_train,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
         drop_last=True,
     )
+
+    data_loader_train_4c = torch.utils.data.DataLoader(
+        dataset_train_4c, sampler=sampler_train_4c,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_mem,
+        drop_last=True,
+    )
+
+    # data_loader_train_4c = None
     
-    data_loader_val = torch.utils.data.DataLoader(
-        dataset_val,
+    data_loader_val1 = torch.utils.data.DataLoader(
+        dataset_val1,
+        batch_size=1,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=False,
+    )
+
+    data_loader_val2 = torch.utils.data.DataLoader(
+        dataset_val2,
         batch_size=1,
         num_workers=0,
         pin_memory=True,
         drop_last=False,
     )
     
-    data_loader_val_SOTS = torch.utils.data.DataLoader(
-        dataset_val_SOTS,
+    data_loader_val3 = torch.utils.data.DataLoader(
+        dataset_val3,
         batch_size=1,
         num_workers=0,
         pin_memory=True,
         drop_last=False,
     )
-    
-    data_loader_val_LOL = torch.utils.data.DataLoader(
-        dataset_val_LOL,
+
+    data_loader_val4 = torch.utils.data.DataLoader(
+        dataset_val4,
         batch_size=1,
         num_workers=0,
         pin_memory=True,
         drop_last=False,
     )
-    
-    data_loader_val_Test100 = torch.utils.data.DataLoader(
-        dataset_val_Test100,
-        batch_size=1,
-        num_workers=0,
-        pin_memory=True,
-        drop_last=False,
-    )
-    
-    
-    
-    data_loader_val_LLF = torch.utils.data.DataLoader(
-        dataset_val_LLF,
-        batch_size=1,
-        num_workers=0,
-        pin_memory=True,
-        drop_last=False,
-    )
-    
-    
-    data_loader_val_single = torch.utils.data.DataLoader(
-        dataset_val_single,
-        batch_size=1,
-        num_workers=0,
-        pin_memory=True,
-        drop_last=False,
-    )
-    
-    data_loader_val_mix = torch.utils.data.DataLoader(
-        dataset_val_mix,
+
+    data_loader_val5 = torch.utils.data.DataLoader(
+        dataset_val5,
         batch_size=1,
         num_workers=0,
         pin_memory=True,
@@ -257,7 +235,9 @@ def main(args):
         print(msg)
 
     model.to(device)
-    epoch_size = len(dataset_train)
+    # epoch_size = len(dataset_train_2c)+len(dataset_train_4c)
+    epoch_size = len(dataset_train_2c)
+    
     print(f'epoch_size is {epoch_size}')
     model_without_ddp = model
     print("Model = %s" % str(model_without_ddp))
@@ -294,26 +274,36 @@ def main(args):
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
+            if data_loader_train_4c is not None:
+                data_loader_train_4c.sampler.set_epoch(epoch)
         train_one_epoch(
             model, data_loader_train,
             optimizer, device, epoch, loss_scaler,
             log_writer=log_writer,
             args=args,
-            epoch_size=epoch_size // eff_batch_size
+            epoch_size=epoch_size // eff_batch_size * args.accum_iter,
+            data_loader_appendix=data_loader_train_4c
         )
 
-        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val, epoch, args.output_dir, mode='val_test', patch_size=16)
-        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val_SOTS, epoch, args.output_dir, mode='val_test_SOTS', patch_size=16)
-        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val_LOL, epoch, args.output_dir, mode='val_test_LOL', patch_size=16)
-        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val_Test100, epoch, args.output_dir, mode='val_test_Test100', patch_size=16)
-        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val_LLF, epoch, args.output_dir, mode='val_test_LLF', patch_size=16)
-        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val_single, epoch, args.output_dir, mode='val_test_single', patch_size=16)
-        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val_mix, epoch, args.output_dir, mode='val_test_mix', patch_size=16)
-        
         if args.output_dir and (epoch % args.save_ckpt_freq == 0 or epoch + 1 == args.epochs):
             misc.save_model(
                 args=args, model=model, model_without_ddp=model_without_ddp, optimizer=optimizer,
                 loss_scaler=loss_scaler, epoch=epoch)
+
+        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val1, epoch, args.output_dir, mode='val_test',
+                                patch_size=16, data_type='sevir')
+        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val2, epoch, args.output_dir, mode='val_test', 
+                               patch_size=16, data_type='trans')
+        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val3, epoch, args.output_dir, mode='val_test', 
+                               patch_size=16, data_type='inter')
+        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val4, epoch, args.output_dir, mode='val_test', 
+                               patch_size=16, data_type='down_scaling_vil')
+        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val5, epoch, args.output_dir, mode='val_test', 
+                               patch_size=16, data_type='predict')
+        # val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val3, epoch, args.output_dir, mode='val_test', 
+        #                        patch_size=16, data_type='inter')
+        # val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val_single, epoch, args.output_dir, mode='val_test_single', patch_size=16)
+        # val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val_mix, epoch, args.output_dir, mode='val_test_mix', patch_size=16)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

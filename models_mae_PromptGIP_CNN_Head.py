@@ -31,7 +31,7 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 class MaskedAutoencoderViT(nn.Module):
     """ Masked Autoencoder with VisionTransformer backbone
     """
-    def __init__(self, img_size=224, patch_size=16, in_chans=3,
+    def __init__(self, img_size=224, patch_size=16, in_chans=2,
                  embed_dim=1024, depth=24, num_heads=16,
                  decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16,
                  mlp_ratio=4., norm_layer=nn.LayerNorm):
@@ -41,6 +41,9 @@ class MaskedAutoencoderViT(nn.Module):
         # MAE encoder specifics
         self.embed_dim = embed_dim
         self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
+        self.patch_embed_4c = PatchEmbed(img_size, patch_size, 4, embed_dim)
+        # self.patch_embed_target = PatchEmbed(img_size, patch_size, 1, embed_dim)
+        self.align_patch = nn.Linear(embed_dim, embed_dim, bias=True)
         num_patches = self.patch_embed.num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
@@ -72,10 +75,13 @@ class MaskedAutoencoderViT(nn.Module):
             for i in range(decoder_depth)])
 
         self.decoder_norm = norm_layer(decoder_embed_dim)
+        # 2 channels decoder
         self.decoder_pred = nn.Linear(decoder_embed_dim, patch_size**2 * in_chans, bias=True) # decoder to patch
+        # 4 channels decoder
+        self.decoder_pred_4c = nn.Linear(decoder_embed_dim, patch_size**2 * 4, bias=True)
         # --------------------------------------------------------------------------
         
-        self.CNN_Head = Simple_Head()
+        self.CNN_Head = Simple_Head(in_c=2, out_c=2)
         
         self.L1_loss = nn.L1Loss()
         
@@ -131,9 +137,9 @@ class MaskedAutoencoderViT(nn.Module):
         assert imgs.shape[2] == imgs.shape[3] and imgs.shape[2] % p == 0
 
         h = w = imgs.shape[2] // p
-        x = imgs.reshape(shape=(imgs.shape[0], 3, h, p, w, p))
+        x = imgs.reshape(shape=(imgs.shape[0], imgs.shape[1], h, p, w, p))
         x = torch.einsum('nchpwq->nhwpqc', x)
-        x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * 3))
+        x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * imgs.shape[1]))
         return x
 
     def unpatchify(self, x):
@@ -205,7 +211,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x_masked, mask, ids_restore
 
-    def forward_encoder(self, x_in, mask_ratio, input_is_list=False, train_mode=True):
+    def forward_encoder(self, x_in, mask_ratio, input_is_list=True, train_mode=True):
         if not input_is_list:
             # split input images
             B, S, C, H, W = x_in.shape
@@ -220,10 +226,18 @@ class MaskedAutoencoderViT(nn.Module):
             x3 = x_in[2]
             x4 = x_in[3]
         
+            B, C, H, W = x1.shape
+
+        if C == 4:
+            x1_tmp = self.patch_embed_4c(x1)
+            x1_embed = self.align_patch(x1_tmp)
+            x3_tmp = self.patch_embed_4c(x3)
+            x3_embed = self.align_patch(x3_tmp)
+        else:
+            x1_embed = self.patch_embed(x1)
+            x3_embed = self.patch_embed(x3)           
         
-        x1_embed = self.patch_embed(x1) # [N, num_patches, D]
         x2_embed = self.patch_embed(x2)
-        x3_embed = self.patch_embed(x3)
         x4_embed = self.patch_embed(x4)
         
         
@@ -241,13 +255,10 @@ class MaskedAutoencoderViT(nn.Module):
         x1_embed = x1_embed + self.img1_pos_embed[:, :x1_embed_len, :]
         x2_embed = x2_embed + self.img2_pos_embed[:, :x2_embed_len, :]
         x3_embed = x3_embed + self.img3_pos_embed[:, :x3_embed_len, :]
-        x4_embed = x4_embed + self.img4_pos_embed[:, :x4_embed_len, :]
-        
+        x4_embed = x4_embed + self.img4_pos_embed[:, :x4_embed_len, :]        
         
         x = torch.cat((x1_embed, x2_embed, x3_embed, x4_embed), dim=1)
-        
-        
-        
+                
         # masking: length -> length * mask_ratio
         preserve_list = []
         if train_mode:
@@ -272,7 +283,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x, mask, ids_restore
 
-    def forward_decoder(self, x, ids_restore):
+    def forward_decoder(self, x, ids_restore, in_c, out_c):
         # embed tokens
         x = self.decoder_embed(x)
 
@@ -297,12 +308,17 @@ class MaskedAutoencoderViT(nn.Module):
         x = self.decoder_norm(x)
 
         # predictor projection
-        x = self.decoder_pred(x)
-
-        # remove cls token
-        x = x[:, 1:, :]
-
-        return x
+        if in_c != out_c:
+            x_2c = self.decoder_pred(x)
+            x_4c  =self.decoder_pred_4c(x)
+            x_2c = x_2c[:, 1:, :]
+            x_4c = x_4c[:, 1:, :]
+            return [x_2c, x_4c]
+        else:
+            x = self.decoder_pred(x)
+            # remove cls token
+            x = x[:, 1:, :]
+            return x
 
     def forward_loss_pix(self, imgs, pred, mask):
         """
@@ -326,8 +342,21 @@ class MaskedAutoencoderViT(nn.Module):
         
         loss = self.L1_loss(pred_target_img1, target_img1) + self.L1_loss(pred_target_img2, target_img2)
         return loss
+    
+    def get_patch_num(self, imgs):
+        input_img1 = imgs[0]
+        target_img1 = imgs[1]
+        input_img2 = imgs[2]
+        target_img2 = imgs[3]
+        input_img1_patch_num = input_img1.shape[2]//self.patch_size*input_img1.shape[3]//self.patch_size
+        target_img1_patch_num = target_img1.shape[2]//self.patch_size*target_img1.shape[3]//self.patch_size
+        input_img2_patch_num = input_img2.shape[2]//self.patch_size*input_img2.shape[3]//self.patch_size
+        target_img2_patch_num = target_img2.shape[2]//self.patch_size*target_img2.shape[3]//self.patch_size
 
-    def forward_CNN_Head(self, pred, imgs, input_is_list=False):
+        return input_img1_patch_num, target_img1_patch_num, input_img2_patch_num, target_img2_patch_num
+
+
+    def forward_CNN_Head(self, pred, imgs, input_is_list=True):
         if not input_is_list:
             # split input images
             B, S, C, H, W = imgs.shape
@@ -342,8 +371,6 @@ class MaskedAutoencoderViT(nn.Module):
             input_img2 = imgs[2]
             target_img2 = imgs[3]
         
-        
-        
         input_img1_patch_num = input_img1.shape[2]//self.patch_size*input_img1.shape[3]//self.patch_size
         target_img1_patch_num = target_img1.shape[2]//self.patch_size*target_img1.shape[3]//self.patch_size
         input_img2_patch_num = input_img2.shape[2]//self.patch_size*input_img2.shape[3]//self.patch_size
@@ -356,8 +383,6 @@ class MaskedAutoencoderViT(nn.Module):
         
         pred_target_img1 = self.CNN_Head(pred_target_img1)
         pred_target_img2 = self.CNN_Head(pred_target_img2)
-        
-        
         
         return pred_target_img1, pred_target_img2
     
@@ -377,35 +402,73 @@ class MaskedAutoencoderViT(nn.Module):
 
         
 
-    def forward(self, imgs, visual_tokens=None, mask_ratio=0.75, input_is_list=False, train_mode=True):
+    def forward(self, imgs, visual_tokens=None, mask_ratio=0.75, input_is_list=True, train_mode=True):
         loss = {}
+
+        if not input_is_list:
+            # split input images
+            B, S, C, H, W = imgs.shape
+        else:
+            x1 = imgs[0]
+            x2 = imgs[1]       
+            _, in_c, _, _ = x1.shape
+            _, out_c, _, _ = x2.shape
+
         latent, mask, ids_restore = self.forward_encoder(imgs, mask_ratio, 
                                                          input_is_list=input_is_list, train_mode=train_mode)
         # print('latent shape: ', latent.shape)
         # print('mask shape: ', mask.shape)
         # print('ids_restore shape: ', ids_restore.shape)
+        multi_channel=False
+        if in_c != out_c:
+            multi_channel=True
         
-        pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
-        pred_target_img1, pred_target_img2 = self.forward_CNN_Head(pred, imgs, input_is_list=input_is_list)
+        pred = self.forward_decoder(latent, ids_restore, in_c, out_c)  # [N, L, p*p*3]
+        if multi_channel:
+            pred_target_img1, pred_target_img2 = self.forward_CNN_Head(pred[0], imgs, input_is_list=input_is_list)
+        else:
+            pred_target_img1, pred_target_img2 = self.forward_CNN_Head(pred, imgs, input_is_list=input_is_list)
         
         
         if visual_tokens is not None:
-            target_img1 = visual_tokens[:, 1, :, :, :]
-            target_img2 = visual_tokens[:, 3, :, :, :]
-            
-            visual_tokens1 = self.patchify(visual_tokens[:, 0, :, :, :])
-            visual_tokens2 = self.patchify(visual_tokens[:, 1, :, :, :])
-            visual_tokens3 = self.patchify(visual_tokens[:, 2, :, :, :])
-            visual_tokens4 = self.patchify(visual_tokens[:, 3, :, :, :])
+            if not isinstance(visual_tokens, list):
+                target_img1 = visual_tokens[:, 1, :, :, :]
+                target_img2 = visual_tokens[:, 3, :, :, :]
+                
+                visual_tokens1 = self.patchify(visual_tokens[:, 0, :, :, :])
+                visual_tokens2 = self.patchify(visual_tokens[:, 1, :, :, :])
+                visual_tokens3 = self.patchify(visual_tokens[:, 2, :, :, :])
+                visual_tokens4 = self.patchify(visual_tokens[:, 3, :, :, :])
 
-            visual_tokens = torch.cat([visual_tokens1, visual_tokens2,
-                                       visual_tokens3, visual_tokens4], dim=1)
-            
-            
-            loss['pix_loss'] = self.forward_loss_pix(visual_tokens, pred, mask)
-            loss['pix_loss_CNN'] = self.forward_loss_pix_CNN(pred_target_img1, pred_target_img2, target_img1, target_img2)
-        
-        
+                visual_tokens = torch.cat([visual_tokens1, visual_tokens2,
+                                        visual_tokens3, visual_tokens4], dim=1)
+                
+                loss['pix_loss'] = self.forward_loss_pix(visual_tokens, pred, mask)
+                loss['pix_loss_CNN'] = self.forward_loss_pix_CNN(pred_target_img1, pred_target_img2, target_img1, target_img2)
+
+            else:
+                target_img1 = visual_tokens[1]
+                target_img2 = visual_tokens[3]
+
+                visual_tokens1 = self.patchify(visual_tokens[0])
+                visual_tokens2 = self.patchify(visual_tokens[1])
+                visual_tokens3 = self.patchify(visual_tokens[2])
+                visual_tokens4 = self.patchify(visual_tokens[3])
+
+                if not multi_channel:
+                    visual_tokens = torch.cat([visual_tokens1, visual_tokens2,
+                                            visual_tokens3, visual_tokens4], dim=1)
+                    
+                    loss['pix_loss'] = self.forward_loss_pix(visual_tokens, pred, mask)
+                    loss['pix_loss_CNN'] = self.forward_loss_pix_CNN(pred_target_img1, pred_target_img2, target_img1, target_img2)
+                else:
+                    visual_tokens = torch.cat([visual_tokens2, visual_tokens2,
+                                            visual_tokens4, visual_tokens4], dim=1)
+                    a,b,c,d = self.get_patch_num(imgs)
+                                       
+                    loss['pix_loss'] = self.forward_loss_pix(visual_tokens, pred[0], mask)
+                    loss['pix_loss_CNN'] = self.forward_loss_pix_CNN(pred_target_img1, pred_target_img2, target_img1, target_img2)
+                
         return loss, pred, mask, pred_target_img1, pred_target_img2
 
 
@@ -419,7 +482,7 @@ def mae_vit_small_patch16(**kwargs):
 
 def mae_vit_base_patch16_dec512d8b(**kwargs):
     model = MaskedAutoencoderViT(
-        patch_size=16, embed_dim=768, depth=12, num_heads=12,
+        img_size=256, patch_size=16, embed_dim=768, depth=12, num_heads=12,
         decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16,
         mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
