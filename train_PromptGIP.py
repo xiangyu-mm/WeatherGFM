@@ -150,7 +150,7 @@ def main(args):
     # SOTS | mismatch_mix
     test_folder = 'input' 
     data_path = os.path.join('/mnt/petrelfs/zhaoxiangyu1/data/Test100_256', test_folder)
-    dataset_val_single = lowlevel_prompt_dataloader.DatasetLowlevel_Customized_Test_DirectLoad_Triplet(data_path)
+    # dataset_val_single = lowlevel_prompt_dataloader.DatasetLowlevel_Customized_Test_DirectLoad_Triplet(data_path)
     
     if True:  # args.distributed:
         num_tasks = misc.get_world_size()
