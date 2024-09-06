@@ -27,7 +27,8 @@ zscore_normalizations_sevir = {
     'vil':{'scale':47.54,'shift':33.44},
     'ir069':{'scale':1174.68,'shift':-3683.58},
     'ir107':{'scale':2562.43,'shift':-1552.80},
-    'lght':{'scale':0.60517,'shift':0.02990}
+    'lght':{'scale':0.60517,'shift':0.02990},
+    'vis':{'scale':2259.96,'shift':-1347.91}
 }
 
 # todo: ir609->ir107; 插帧60min->30min; 预测，4frame->1frame
@@ -436,6 +437,11 @@ class DatasetSevir_Train(Dataset):
                 return len(self.event_ids)*24
             else:
                 return len(self.event_ids)*4
+        elif self.task == 'vis_recon':
+            if self.phase == 'train':
+                return len(self.event_ids)*24
+            else:
+                return len(self.event_ids)*4
     
     def get_sevir_in_out(self, ids):
         # evrty event has 49 frame
@@ -486,15 +492,32 @@ class DatasetSevir_Train(Dataset):
         sat_out = out_data[0]
         return sat_in, sat_out
     
-    def get_vis_reconstruction(self, ids):
-        # evrty event has 49 frame
-
+    def get_random_day_vis(self, ids):
         if self.phase == 'train':
             event_id = ids // 24
             frame_id = (ids % 24)*2
         else:
             event_id = ids // 4
             frame_id = (ids % 4)*10
+        event = self.event_ids[event_id]
+        event_time = self.get_line_time(event)
+        path = f"s3://sevir_pair/vis/{event_time}/{event}.npy"
+        data = io.BytesIO(client.get(path))
+        data = np.load(data)
+        data = data[:, :, frame_id]
+        if data.mean() > 100:
+            return event_id, frame_id
+        else:
+            if self.phase == 'train':
+                random_ids = random.randint(0, len(self.event_ids)*24-1)
+            else:
+                random_ids = random.randint(0, len(self.event_ids)*4-1)
+            return self.get_random_day_vis(random_ids)
+
+    def get_vis_reconstruction(self, ids):
+        # evrty event has 49 frame
+
+        event_id, frame_id = self.get_random_day_vis(ids)
 
         event = self.event_ids[event_id]
         event_time = self.get_line_time(event)
@@ -511,11 +534,8 @@ class DatasetSevir_Train(Dataset):
             data = np.load(data)
             data = data[:, :, frame_id]
             # normalization
-            if data.mean() > 100:
-                data = (data-zscore_normalizations_sevir['vis']['shift'])/zscore_normalizations_sevir['vis']['scale']
-                data = np.expand_dims(data, axis=-1)
-            else:
-                data = get_random_day_vis()
+            data = (data-zscore_normalizations_sevir['vis']['shift'])/zscore_normalizations_sevir['vis']['scale']
+            data = np.expand_dims(data, axis=-1)
             out_data.append(data)
         sat_out = out_data[0]
 
@@ -616,7 +636,7 @@ class DatasetSevir_Train(Dataset):
         vil_out = np.expand_dims(vil_out, axis=-1)
         return vil_in, vil_out
     
-    def get_ir_predict(self, ids):
+    def get_ir_predict(self, ids, variable_type=None):
         # evrty event has 49 frame
         if self.phase == 'train':
             event_id = ids // 24
@@ -698,6 +718,8 @@ class DatasetSevir_Train(Dataset):
             if variable == 'vil':
                 data = (data-zscore_normalizations_sevir['vil']['shift'])/zscore_normalizations_sevir['vil']['scale']
                 # data = np.expand_dims(data, axis=-1)
+            if variable == 'ir069':
+                data = (data-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
         vil_in = data[:,:]
         vil_out = data[:,:]
         vil_in = np.expand_dims(vil_in, axis=-1)
@@ -708,7 +730,7 @@ class DatasetSevir_Train(Dataset):
             vil_in = cv2.resize(np.copy(vil_in), (64, 64),
                         interpolation=cv2.INTER_LINEAR)
         else:
-            vil_in = cv2.resize(np.copy(vil_in), (96, 96),
+            vil_in = cv2.resize(np.copy(vil_in), (64, 64),
                         interpolation=cv2.INTER_LINEAR)
         return vil_in, vil_out
 
@@ -743,6 +765,9 @@ class DatasetSevir_Train(Dataset):
         elif dataset_choice == 'ir_predict':
             sat_in, rad_out = self.get_ir_predict(idx, variable_type=['ir069'])
             context_sat_in, context_rad_out = self.get_ir_predict(random_index, variable_type=['ir069'])
+        elif dataset_choice == 'vis_recon':
+            sat_in, rad_out = self.get_vis_reconstruction(idx)
+            context_sat_in, context_rad_out = self.get_vis_reconstruction(random_index)
         H, W, _ = sat_in.shape
         if H != self.HQ_size or W != self.HQ_size:
             sat_in = cv2.resize(np.copy(sat_in), (self.HQ_size, self.HQ_size),
@@ -823,9 +848,9 @@ class Dataset_dblur(Dataset):
         preprocessed total length: 12120
         """
         if split == 'train':
-            files = list(range(0, 9000))
+            files = list(range(0, 10500))
         elif split == 'valid':
-            files = list(range(9000, 10500))
+            files = list(range(10500, 12000))
         elif split == 'test':
             files = list(range(10500, 12000))
         return files
@@ -868,10 +893,10 @@ class Dataset_dblur(Dataset):
         deg_type='dblur'
 
         if self.split == 'train':
-            img_HQ1 = np.ascontiguousarray(blur_frame_data).float()
-            img_HQ2 = np.ascontiguousarray(gt_frame_data).float()
-            img_LQ1 = np.ascontiguousarray(context_blur_frame_data).float()
-            img_LQ2 = np.ascontiguousarray(context_gt_frame_data).float()
+            img_HQ1 = torch.from_numpy(np.ascontiguousarray(blur_frame_data)).float()
+            img_HQ2 = torch.from_numpy(np.ascontiguousarray(gt_frame_data)).float()
+            img_LQ1 = torch.from_numpy(np.ascontiguousarray(context_blur_frame_data)).float()
+            img_LQ2 = torch.from_numpy(np.ascontiguousarray(context_gt_frame_data)).float()
 
             img_HQ1 = np.repeat(img_HQ1, 2, axis=0)
             img_LQ1 = np.repeat(img_LQ1, 2, axis=0)
@@ -892,10 +917,10 @@ class Dataset_dblur(Dataset):
             return batch, deg_type
         
         else:
-            img_HQ1 = np.ascontiguousarray(blur_frame_data).float()
-            img_HQ2 = np.ascontiguousarray(gt_frame_data).float()
-            img_LQ1 = np.ascontiguousarray(context_blur_frame_data).float()
-            img_LQ2 = np.ascontiguousarray(context_gt_frame_data).float()
+            img_HQ1 = torch.from_numpy(np.ascontiguousarray(blur_frame_data)).float()
+            img_HQ2 = torch.from_numpy(np.ascontiguousarray(gt_frame_data)).float()
+            img_LQ1 = torch.from_numpy(np.ascontiguousarray(context_blur_frame_data)).float()
+            img_LQ2 = torch.from_numpy(np.ascontiguousarray(context_gt_frame_data)).float()
 
             img_HQ1 = np.repeat(img_HQ1, 2, axis=0)
             img_LQ1 = np.repeat(img_LQ1, 2, axis=0)

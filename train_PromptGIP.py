@@ -18,6 +18,8 @@ from engine_pretrain import train_one_epoch
 from dataset.data_utiles import load_config
 import dataset.lowlevel_PromtGIP_dataloader as lowlevel_prompt_dataloader
 from evaluation_prompt import *
+from dataset.rainnet_dataloader import RainNetDataset
+from dataset.satellite_dataloader import MyDataset
 
 from petrel_client.client import Client
 
@@ -125,11 +127,24 @@ def main(args):
                                                                    phase='train',task='inter')
     dataset_train4 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='down_scaling_vil',input_size=args.input_size,
                                                                    phase='train',task='down_scaling')
+    dataset_train5 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='vis_recon',input_size=args.input_size,
+                                                                   phase='train',task='down_scaling')
+    dataset_train6 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='down_scaling_ir',input_size=args.input_size,
+                                                                   phase='train',task='down_scaling')
+    dataset_train7 = lowlevel_prompt_dataloader.Dataset_dblur(split='train')
     # 4 channels dataset
-    dataset_train_4c = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='predict',input_size=args.input_size,
+    dataset_train_4c1 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='ir_predict',input_size=args.input_size,
                                                                    phase = 'train',task='predict')
+    dataset_train_4c2 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='predict',input_size=args.input_size,
+                                                                   phase = 'train',task='predict')
+    # rainnet_dataset
+    dataset_train8 = RainNetDataset('train', frame=4, is_crop=True)
+    # satellite_dataset
+    dataset_train_4c3 = MyDataset('train')
 
-    dataset_train_2c = dataset_train1+dataset_train2+dataset_train3+dataset_train4
+    dataset_train_2c = dataset_train1+dataset_train2+dataset_train3+dataset_train4+dataset_train5+\
+                        dataset_train6+dataset_train7+dataset_train8
+    dataset_train_4c = dataset_train_4c1+dataset_train_4c2+dataset_train_4c3
     print(dataset_train_2c.__len__())
     # dataset_train_2c = dataset_train_4c
     print(dataset_train_4c.__len__())

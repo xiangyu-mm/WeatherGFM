@@ -4,6 +4,8 @@ import os
 import pandas as pd
 import torch
 import random
+import json
+import io
 
 from petrel_client.client import Client
 
@@ -131,48 +133,27 @@ def prepare_data(df, list_input, list_output, ratio_train, ratio_valid, ratio_te
     
     return df_train, df_valid, df_test, dict_min, dict_max
 
-def get_filelist(df, path_root):
+def get_filelist(split='train'):
     
     path_ir_list, path_pctprecip_list, path_terra_list = [], [], []
-    
-    basin_list = df['basin'].tolist()
-    cyclone_number_list = df['cyclone_number'].tolist()
-    cyclone_number_list = [str(num).zfill(2) for num in cyclone_number_list]
-    season_list = df['season'].tolist()
+    if split=='train':
+        all_data = json.load(open('/mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/sat_dataset_list/sat_list_train.json'))
+    if split=='val':
+        all_data = json.load(open('/mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/sat_dataset_list/sat_list_val.json'))
+    path_ir_list = all_data['path_ir_list']
+    path_pctprecip_list = all_data['path_pctprecip_list']
+    path_terra_list = all_data['path_terra_list']
 
-    instrument_name_list = df['instrument_name'].tolist()
-    platform_name_list = df['platform_name'].tolist()
-
-    time_list = df['time'].tolist()
-
-    my_level_list = df['my_level'].tolist()
-
-    for i in range(len(time_list)):
-
-        time_pmw_str = datetime.strptime(time_list[i], '%Y-%m-%d %H:%M:%S')
-        time_pmw_str = datetime.strftime(time_pmw_str, '%Y%m%d%H%M%S')
-
-        ATCF_ID = f'{basin_list[i]}{cyclone_number_list[i]}{season_list[i]}'
-
-        for instrument_platform in ['AHI_Himawari8', 'ABI_GOESwest', 'ABI_GOESeast']:
-            path_ir = f'{path_root}/infrared/{season_list[i]}/{ATCF_ID}/{my_level_list[i]}/{ATCF_ID}_{instrument_platform}_{time_pmw_str}.npz'
-            if os.path.exists(path_ir):
-                break
-        path_pctprecip = f'{path_root}/microwave_precip/{season_list[i]}/{ATCF_ID}/{my_level_list[i]}/{ATCF_ID}_{instrument_name_list[i]}_{platform_name_list[i]}_{time_pmw_str}.npz'
-        path_terra = f'{path_root}/terra/{season_list[i]}/{ATCF_ID}/{my_level_list[i]}/{ATCF_ID}_{time_pmw_str}.npz'
-        
-        path_ir_list.append(path_ir); path_pctprecip_list.append(path_pctprecip); path_terra_list.append(path_terra)
-        
     return path_ir_list, path_pctprecip_list, path_terra_list
 
 class MyDataset(torch.utils.data.Dataset):
     def __init__(self,
                 dataset_type,
-                patch_size,
-                dict_min, dict_max,
+                patch_size=256,
                 need_terra=True,
                 sea_value=-1000,
-                fill_value=0,):
+                fill_value=0,
+                split='train'):
         
         path_root = '/mnt/petrelfs/zhaoxiangyu1/data/'
 
@@ -185,15 +166,17 @@ class MyDataset(torch.utils.data.Dataset):
         df = pd.read_csv(f'{path_root}/csv/info.csv')
         df_train, df_valid, df_test, dict_min, dict_max = prepare_data(df, self.list_input, self.list_output, ratio_train, ratio_valid, ratio_test, must_in_test, random_seed)
         if dataset_type == 'train':
-            self.path_ir_list_test,  self.path_pctprecip_list_test,  self.path_terra_list_test  = get_filelist(df_train, path_root)
-        elif dataset_type == 'valid':
-            self.path_ir_list_test,  self.path_pctprecip_list_test,  self.path_terra_list_test  = get_filelist(df_valid, path_root)
+            self.filelist_ir, self.filelist_pctprecip, self.filelist_terra = get_filelist(split)
+        elif dataset_type == 'val':
+            self.filelist_ir, self.filelist_pctprecip, self.filelist_terra = get_filelist(split)
         self.dataset_type = dataset_type
         self.patch_size = patch_size
-        self.min, self.max = dict_min, dict_max
+        self.min = {'min_C07': 172.752, 'min_C08': 172.197, 'min_C09': 172.296, 'min_C10': 175.511, 'min_C12': 179.553, 'min_C13': 175.56, 'min_C14': 176.295, 'min_C15': 174.172, 'min_C16': 170.838, 'min_pct37': 138.643, 'min_pct89': 54.002, 'min_precip': 0.0, 'min_terra': 0.0}
+        self.max = {'max_C07': 359.456, 'max_C08': 324.413, 'max_C09': 316.124, 'max_C10': 290.336, 'max_C12': 284.381, 'max_C13': 318.761, 'max_C14': 317.384, 'max_C15': 319.212, 'max_C16': 299.252, 'max_pct37': 350.559, 'max_pct89': 320.947, 'max_precip': 147.14, 'max_terra': 7891.156}
         self.need_terra = need_terra
         self.sea_value = sea_value
         self.fill_value = fill_value
+        self.split = split
     
     def normalize(self, data, data_min, data_max):
         normalized = np.where(data_min == data_max, 0, (data - data_min) / (data_max - data_min + 1e-7))
@@ -211,13 +194,12 @@ class MyDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.filelist_ir)
+    
+    def get_item(self, index):
+        npz_ir = np.load(io.BytesIO(client.get(self.filelist_ir[index])), allow_pickle=True)
+        npz_terra = np.load(io.BytesIO(client.get(self.filelist_terra[index])), allow_pickle=True)
+        npz_pctprecip = np.load(io.BytesIO(client.get(self.filelist_pctprecip[index])), allow_pickle=True)
 
-    def __getitem__(self, index):
-        
-        # 加载原数据
-        npz_ir = np.load(self.filelist_ir[index], allow_pickle=True)
-        npz_terra = np.load(self.filelist_terra[index], allow_pickle=True)
-        npz_pctprecip = np.load(self.filelist_pctprecip[index], allow_pickle=True)
         # 加载inputs到字典
         inputs = {}
         for input_name in self.list_input + ['terra']:
@@ -273,18 +255,35 @@ class MyDataset(torch.utils.data.Dataset):
         mask_tensor = torch.from_numpy(mask).float()
         inputs_tensor = torch.from_numpy(np.concatenate(list(inputs.values()), axis=0)).float()
         inputs_tensor = torch.cat([mask_tensor.reshape(1, 256, 256), inputs_tensor], dim=0)
-        labels_tensor = torch.from_numpy(np.concatenate(list(labels.values()), axis=0)).float()        
+        labels_tensor = torch.from_numpy(np.concatenate(list(labels.values()), axis=0)).float()
+
+        return inputs_tensor, labels_tensor         
         
-        if self.need_terra:
-            return self.get_patch({
-                'conditions': inputs_tensor,
-                'labels': labels_tensor,
-                'mask': mask_tensor,
-            })
+        # return self.get_patch({
+        #     'conditions': inputs_tensor,
+        #     'labels': labels_tensor,
+        #     'mask': mask_tensor,
+        # })  
+
+    def __getitem__(self, index):
+        
+        # 加载原数据
+        file = self.get_item(index)
+        random_index = random.randint(0, len(self.filelist_ir)-1)
+        random_file = self.get_item(random_index)
+        deg_type = 'sat_trans'
+        sat_in, sat_out = file
+        context_sat_in, context_sat_out = random_file
+        data_list = [0,1,6,9]
+        sat_in = sat_in[data_list,:,:]
+        context_sat_in = context_sat_in[data_list,:,:]
+
+        if self.split == 'train':
+            batch = [context_sat_in, context_sat_out, sat_in, sat_out]
+            return batch, deg_type
         else:
-            return self.get_patch({
-                'conditions': inputs_tensor[:-1],
-                'labels': labels_tensor,
-                'mask': mask_tensor,
-            })
+            batch = {'input_query_img1': context_sat_in, 'target_img1': context_sat_out,
+                    'input_query_img2': sat_in, 'target_img2': sat_out}
+            return batch, deg_type
+            
 
