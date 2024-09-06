@@ -14804,3 +14804,36 @@ Parameter Group 1
 [19:44:30.374632] {'pix_loss': tensor(0.0214, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0910, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
 [19:44:44.331128] {'pix_loss': tensor(0.0172, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0901, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
 [19:44:44.938170] {'pix_loss': tensor(0.0148, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0939, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:46:15.465427] {'pix_loss': tensor(0.0172, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0966, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:46:46.016159] {'pix_loss': tensor(0.0134, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0788, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:46:46.592156] {'pix_loss': tensor(0.0121, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0746, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:46:59.973470] {'pix_loss': tensor(0.0225, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.1015, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:47:22.824468] {'pix_loss': tensor(0.0179, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0930, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:47:40.386235] {'pix_loss': tensor(0.0225, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.1094, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:47:51.276802] Epoch: [0]  [13920/45336]  eta: 6 days, 17:54:35  lr: 0.000019  pix_loss: 0.0174 (0.0305)  pix_loss_CNN: 0.0930 (0.1036)  time: 19.0727  data: 0.0000  max mem: 57041
+[19:47:51.311907] {'pix_loss': tensor(0.0143, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0940, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:48:15.087116] {'pix_loss': tensor(0.0225, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.1055, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:48:32.631550] {'pix_loss': tensor(0.0082, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0600, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:48:33.239898] {'pix_loss': tensor(0.0149, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0825, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:49:23.094075] {'pix_loss': tensor(0.0150, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0916, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:49:41.372862] {'pix_loss': tensor(0.0171, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0847, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:49:49.821686] {'pix_loss': tensor(0.0131, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0708, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:49:50.469437] {'pix_loss': tensor(0.0202, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.1097, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:50:09.695831] {'pix_loss': tensor(0.0303, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.1183, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:50:10.296439] {'pix_loss': tensor(0.0253, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.1133, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:50:38.753578] {'pix_loss': tensor(0.0213, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0938, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:51:05.888665] {'pix_loss': tensor(0.0295, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.1297, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:51:41.810003] {'pix_loss': tensor(0.0171, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0803, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:51:50.295028] {'pix_loss': tensor(0.0098, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0606, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:52:05.416689] {'pix_loss': tensor(0.0160, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0823, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:52:06.051168] {'pix_loss': tensor(0.0171, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.1005, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:52:06.627493] {'pix_loss': tensor(0.0138, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0872, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:52:23.095350] {'pix_loss': tensor(0.0116, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0731, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:52:23.695064] {'pix_loss': tensor(0.0173, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0886, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:52:56.417977] {'pix_loss': tensor(0.0115, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0782, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:52:56.988330] Epoch: [0]  [13940/45336]  eta: 6 days, 17:45:57  lr: 0.000019  pix_loss: 0.0160 (0.0305)  pix_loss_CNN: 0.0872 (0.1036)  time: 15.2855  data: 0.0000  max mem: 57041
+[19:53:10.856135] {'pix_loss': tensor(0.0102, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0603, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:53:21.870252] {'pix_loss': tensor(0.0167, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0858, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:53:22.479783] {'pix_loss': tensor(0.0133, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0849, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:53:38.812481] {'pix_loss': tensor(0.0195, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0855, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
+[19:54:45.375047] {'pix_loss': tensor(0.0176, device='cuda:0', grad_fn=<_DDPSinkBackward>), 'pix_loss_CNN': tensor(0.0959, device='cuda:0', grad_fn=<_DDPSinkBackward>)}
