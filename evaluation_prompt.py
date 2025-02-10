@@ -7,13 +7,25 @@ import copy
 import math
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+from util.display import get_cmap
 
 zscore_normalizations_sevir = {
     'vil':{'scale':47.54,'shift':33.44},
     'ir069':{'scale':1174.68,'shift':-3683.58},
     'ir107':{'scale':2562.43,'shift':-1552.80},
-    'lght':{'scale':0.60517,'shift':0.02990}
+    'lght':{'scale':0.60517,'shift':0.02990},
+    'vis':{'scale':2259.96,'shift':-1347.91}
 }
+
+max_min_satellite = {
+    'pct37':{'max':350.559, 'min':138.643},
+    'pct89':{'max':320.947, 'min':54.002}
+}
+
+vis_cmap,vis_norm,vis_vmin,vis_vmax = get_cmap('vis',encoded=True)
+ir069_cmap,ir069_norm,ir069_vmin,ir069_vmax = get_cmap('ir069',encoded=True)
+ir107_cmap,ir107_norm,ir107_vmin,ir107_vmax = get_cmap('ir107',encoded=True)
+vil_cmap,vil_norm,vil_vmin,vil_vmax = get_cmap('vil',encoded=True)
 
 def is_dist_avail_and_initialized():
     if not dist.is_available():
@@ -151,7 +163,7 @@ def val_on_master_CNN_Head(model, data_loader_val, epoch, save_path, mode, patch
     if is_main_process():
         val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode, patch_size, data_type)
 
-def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretrain', patch_size=16, data_type='sevir'):
+def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretrain', patch_size=16, data_type='era5', val_mode=False):
     if mode == 'val_pretrain':
         mask_ratio = 0.75
         train_mode = True
@@ -161,8 +173,14 @@ def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretr
         
     idx = 0
     for batch, deg_type in data_loader_val:
+        if not val_mode:
+            if idx > 10:
+                break
         idx += 1
         #print('idx: ', idx, len(batch), deg_type)
+        if data_type == 'era5':
+            lead_time = batch['lead_time'].cuda()
+            out_var = batch['out_var'].cuda()
         input_img1 = batch['input_query_img1'].cuda()
         target_img1 = batch['target_img1'].cuda()
         input_img2 = batch['input_query_img2'].cuda()
@@ -173,7 +191,15 @@ def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretr
         else:
             target_img2 = input_img2
             target_img2_flag = False
-        input_sequence = [input_img1, target_img1, input_img2, target_img2]
+        if not val_mode:
+            input_img1=input_img1[:1,:,:,:]
+            target_img1=target_img1[:1,:,:,:]
+            input_img2=input_img2[:1,:,:,:]
+            target_img2=target_img2[:1,:,:,:]
+        if data_type == 'era5':
+            input_sequence = [input_img1, target_img1, input_img2, target_img2, lead_time, out_var]
+        else:
+            input_sequence = [input_img1, target_img1, input_img2, target_img2]
         model.eval()
         loss, pred, mask, pred_target_img1, pred_target_img2 = model(imgs=input_sequence, mask_ratio=mask_ratio, input_is_list=True, train_mode=train_mode)
         
@@ -201,6 +227,44 @@ def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretr
         target_img1 = torch.einsum('nchw->nhwc', target_img1).detach().cpu()
         input_img2 = torch.einsum('nchw->nhwc', input_img2).detach().cpu()
         target_img2 = torch.einsum('nchw->nhwc', target_img2).detach().cpu()
+        if data_type == 'era5':
+            input_img21 = input_img2[0][:,:,out_var[0]]
+            target_img1 = target_img1[0][:,:,0]
+            target_mask_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0])
+            target_img2 = target_img2[0][:,:,0]
+            target_mask_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0])
+
+            pred_target_img1 = pred_target_img1[0][:,:,0]
+            pred_target_mask_img1 = pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]
+            pred_target_mask_img2 = pred_target_img2 * (target_img2_mask[0][:,:,0])
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+            
+            plt.figure(figsize=(20, 4))
+            plt.subplot(1, 3, 1)
+            plt.imshow(input_img21, cmap='viridis')
+            plt.axis('off')
+
+            plt.subplot(1, 3, 2)
+            plt.imshow(target_img2, cmap='viridis')
+            plt.axis('off')
+
+            plt.subplot(1, 3, 3)
+            plt.imshow(pred_target_final_img2, cmap='viridis')
+            plt.axis('off')
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
+
         if data_type == 'sevir':
             input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
             input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
@@ -219,45 +283,36 @@ def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretr
             pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
             plt.figure(figsize=(20, 8))
             plt.subplot(2, 4, 1)
-            plt.imshow(input_img11, cmap='inferno')
-            plt.title('IR_069 Data')
-            plt.colorbar()
-            plt.colorbar(shrink=0.5)
+            plt.imshow(input_img11, cmap=ir069_cmap, norm=ir069_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 2)
-            plt.imshow(input_img12, cmap='inferno')
-            plt.title('IR_107 Data')
-            plt.colorbar()
+            plt.imshow(input_img12, cmap=ir107_cmap, norm=ir107_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 3)
-            plt.imshow(target_img1, cmap='viridis')
-            plt.title('vil_gt Data')
-            plt.colorbar()
+            plt.imshow(target_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 4)
-            plt.imshow(pred_target_final_img1, cmap='viridis')
-            plt.title('vil_pred Data')
-            plt.colorbar()
+            plt.imshow(pred_target_final_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 5)
-            plt.imshow(input_img21, cmap='inferno')
-            plt.title('IR_069 Data')
-            plt.colorbar()
+            plt.imshow(input_img21, cmap=ir069_cmap, norm=ir069_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 6)
-            plt.imshow(input_img22, cmap='inferno')
-            plt.title('IR_107 Data')
-            plt.colorbar()
+            plt.imshow(input_img22, cmap=ir107_cmap, norm=ir107_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 7)
-            plt.imshow(target_img2, cmap='viridis')
-            plt.title('vil_gt Data')
-            plt.colorbar()
+            plt.imshow(target_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 8)
-            plt.imshow(pred_target_final_img2, cmap='viridis')
-            plt.title('vil_pred Data')
-            plt.colorbar()
+            plt.imshow(pred_target_final_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.tight_layout()
         
@@ -267,6 +322,8 @@ def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretr
             
             plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
             plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
         
         elif data_type == 'trans':
             input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
@@ -283,53 +340,101 @@ def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretr
 
             plt.figure(figsize=(20, 8))
             plt.subplot(2, 4, 1)
-            plt.imshow(input_img11, cmap='inferno')
-            plt.title('IR_069 Data')
-            plt.colorbar()
+            plt.imshow(input_img11, cmap=ir069_cmap, norm=ir069_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 2)
-            plt.imshow(input_img12, cmap='inferno')
-            plt.title('IR_069 Data')
-            plt.colorbar()
+            plt.imshow(input_img12, cmap=ir069_cmap, norm=ir069_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 3)
-            plt.imshow(target_img1, cmap='inferno')
-            plt.title('IR_107 Data')
-            plt.colorbar()
+            plt.imshow(target_img1, cmap=ir107_cmap, norm=ir107_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 4)
-            plt.imshow(pred_target_final_img1, cmap='inferno')
-            plt.title('ir_pred Data')
-            plt.colorbar()
+            plt.imshow(pred_target_final_img1, cmap=ir107_cmap, norm=ir107_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 5)
-            plt.imshow(input_img21, cmap='inferno')
-            plt.title('IR_069 Data')
-            plt.colorbar()
+            plt.imshow(input_img21, cmap=ir069_cmap, norm=ir069_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 6)
-            plt.imshow(input_img22, cmap='inferno')
-            plt.title('IR_069 Data')
-            plt.colorbar()
+            plt.imshow(input_img22, cmap=ir069_cmap, norm=ir069_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 7)
-            plt.imshow(target_img2, cmap='inferno')
-            plt.title('IR_107 Data')
-            plt.colorbar()
+            plt.imshow(target_img2, cmap=ir107_cmap, norm=ir107_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 8)
-            plt.imshow(pred_target_final_img2, cmap='inferno')
-            plt.title('IR_107 Data')
-            plt.colorbar()
+            plt.imshow(pred_target_final_img2, cmap=ir107_cmap, norm=ir107_norm)
+            plt.axis('off')
 
             plt.tight_layout()
         
-            save_path_img = os.path.join(save_path, 'ir', mode, 'Epoch{}'.format(epoch))
+            save_path_img = os.path.join(save_path, 'ir0672ir107', mode, 'Epoch{}'.format(epoch))
             if not os.path.exists(save_path_img):
                 os.makedirs(save_path_img)
-            
             plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
             plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
+        elif data_type == 'ir107_trans_ir069':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap=ir107_cmap, norm=ir107_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap=ir107_cmap, norm=ir107_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap=ir069_cmap, norm=ir069_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap=ir069_cmap, norm=ir069_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap=ir107_cmap, norm=ir107_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap=ir107_cmap, norm=ir107_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap=ir069_cmap, norm=ir069_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap=ir069_cmap, norm=ir069_norm)
+            plt.axis('off')
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'ir1072ir069', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
         elif data_type == 'inter':
             input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
             input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
@@ -345,53 +450,454 @@ def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretr
 
             plt.figure(figsize=(20, 8))
             plt.subplot(2, 4, 1)
-            plt.imshow(input_img11, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(input_img11, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 2)
-            plt.imshow(input_img12, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(input_img12, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 3)
-            plt.imshow(target_img1, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(target_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 4)
-            plt.imshow(pred_target_final_img1, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(pred_target_final_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 5)
-            plt.imshow(input_img21, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(input_img21, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 6)
-            plt.imshow(input_img22, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(input_img22, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 7)
-            plt.imshow(target_img2, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(target_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 8)
-            plt.imshow(pred_target_final_img2, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(pred_target_final_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.tight_layout()
         
-            save_path_img = os.path.join(save_path, 'inter', mode, 'Epoch{}'.format(epoch))
+            save_path_img = os.path.join(save_path, 'vil_inter', mode, 'Epoch{}'.format(epoch))
             if not os.path.exists(save_path_img):
                 os.makedirs(save_path_img)
             
             plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
             plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
+
+        elif data_type == 'vil_inter_15min':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'vil_inter_15min', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
+        elif data_type == 'vil_inter_60min':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'vil_inter_60min', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+        elif data_type == 'ir069_inter_60min':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'ir069_inter_60min', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+        elif data_type == 'down_scaling_ir':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR069 Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'down_scaling_ir069', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
+
+        elif data_type == 'down_scaling_ir107':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('Low level IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('Low level IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('High level IR107')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('High level IR107 Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'down_scaling_ir107', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
+
+        elif data_type == 'multi_downscaling':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            target_img11 = target_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            target_img12 = target_img1[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            target_img21 = target_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            target_img22 = target_img2[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            
+            pred_target_img11 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            pred_target_img12 = pred_target_img1[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            
+            pred_target_final_img11 = target_img11 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img11 * (target_img1_mask[0][:,:,0])
+            pred_target_final_img12 = target_img12 * (1 - target_img1_mask[0][:,:,1]) + pred_target_img12 * (target_img1_mask[0][:,:,1])
+            pred_target_img21 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            pred_target_img22 = pred_target_img2[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            
+            pred_target_final_img21 = target_img21 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img21 * (target_img2_mask[0][:,:,0])
+            pred_target_final_img22 = target_img22 * (1 - target_img2_mask[0][:,:,1]) + pred_target_img22 * (target_img2_mask[0][:,:,1])
+
+            plt.figure(figsize=(30, 8))
+            plt.subplot(2, 6, 1)
+            plt.imshow(input_img11, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 2)
+            plt.imshow(input_img12, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 3)
+            plt.imshow(target_img11, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 4)
+            plt.imshow(pred_target_final_img11, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 5)
+            plt.imshow(target_img12, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 6)
+            plt.imshow(pred_target_final_img12, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 7)
+            plt.imshow(input_img21, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('Low level IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 8)
+            plt.imshow(input_img22, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('Low level IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 9)
+            plt.imshow(target_img21, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('High level IR107')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 10)
+            plt.imshow(pred_target_final_img21, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('High level IR107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 11)
+            plt.imshow(target_img22, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('High level IR107')
+            plt.colorbar()
+
+            plt.subplot(2, 6, 12)
+            plt.imshow(pred_target_final_img22, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('High level IR107 Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'multi_downscaling', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+        
         elif data_type == 'down_scaling_vil':
             input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
             input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
@@ -407,53 +913,167 @@ def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretr
 
             plt.figure(figsize=(20, 8))
             plt.subplot(2, 4, 1)
-            plt.imshow(input_img11, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(input_img11, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 2)
-            plt.imshow(input_img12, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(input_img12, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 3)
-            plt.imshow(target_img1, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(target_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 4)
-            plt.imshow(pred_target_final_img1, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(pred_target_final_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 5)
-            plt.imshow(input_img21, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(input_img21, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 6)
-            plt.imshow(input_img22, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(input_img22, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 7)
-            plt.imshow(target_img2, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(target_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.subplot(2, 4, 8)
-            plt.imshow(pred_target_final_img2, cmap='viridis')
-            plt.title('VIL Data')
-            plt.colorbar()
+            plt.imshow(pred_target_final_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.tight_layout()
         
             save_path_img = os.path.join(save_path, 'down_scaling_vil', mode, 'Epoch{}'.format(epoch))
             if not os.path.exists(save_path_img):
                 os.makedirs(save_path_img)
-            
             plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
             plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
+        
+        elif data_type == 'down_scaling_vil_8x':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL low level Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL low level Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL high level Data GT')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL high level Data predict')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL low level Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL low level Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL high level Data GT')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.title('VIL high level Data predict')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'down_scaling_vil_8x', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
+
+        elif data_type == 'dblur':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'dblur', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
+
         elif data_type == 'predict':
             input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
             input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
@@ -463,117 +1083,762 @@ def val_model_CNN_Head(model, data_loader_val, epoch, save_path, mode='val_pretr
             input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
             input_img23 = input_img2[0][:,:,2]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
             input_img24 = input_img2[0][:,:,3]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
-            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
-            target_mask_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0])
-            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
-            target_mask_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0])
+            target_img11 = target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img12 = target_img1[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img21 = target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            target_img22 = target_img2[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
 
-            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
-            pred_target_mask_img1 = pred_target_img1 * (target_img1_mask[0][:,:,0])
-            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
-            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
-            pred_target_mask_img2 = pred_target_img2 * (target_img2_mask[0][:,:,0])
-            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
-            plt.figure(figsize=(30, 8))
-            plt.subplot(2, 6, 1)
-            plt.imshow(input_img11, cmap='viridis')
-            plt.title('vil_0min Data')
-            plt.colorbar()
-            plt.colorbar(shrink=0.5)
+            pred_target_img11 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_img12 = pred_target_img1[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            
+            pred_target_final_img11 = target_img11 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img11 * (target_img1_mask[0][:,:,0])
+            pred_target_final_img12 = target_img12 * (1 - target_img1_mask[0][:,:,1]) + pred_target_img12 * (target_img1_mask[0][:,:,1])
+            pred_target_img21 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            pred_target_img22 = pred_target_img2[0][:,:,1]*zscore_normalizations_sevir['vil']['scale']+zscore_normalizations_sevir['vil']['shift']
+            
+            pred_target_final_img21 = target_img21 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img21 * (target_img2_mask[0][:,:,0])
+            pred_target_final_img22 = target_img22 * (1 - target_img2_mask[0][:,:,1]) + pred_target_img22 * (target_img2_mask[0][:,:,1])
+            plt.figure(figsize=(40, 8))
+            plt.subplot(2, 8, 1)
+            plt.imshow(input_img11, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
-            plt.subplot(2, 6, 2)
-            plt.imshow(input_img12, cmap='viridis')
-            plt.title('vil_30min Data')
-            plt.colorbar()
+            plt.subplot(2, 8, 2)
+            plt.imshow(input_img12, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
-            plt.subplot(2, 6, 3)
-            plt.imshow(input_img13, cmap='viridis')
-            plt.title('vil_60min Data')
-            plt.colorbar()
+            plt.subplot(2, 8, 3)
+            plt.imshow(input_img13, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
-            plt.subplot(2, 6, 4)
-            plt.imshow(input_img14, cmap='viridis')
-            plt.title('vil_90min Data')
-            plt.colorbar()
+            plt.subplot(2, 8, 4)
+            plt.imshow(input_img14, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
-            plt.subplot(2, 6, 5)
-            plt.imshow(target_img1, cmap='viridis')
-            plt.title('vil_gt Data')
-            plt.colorbar()
+            plt.subplot(2, 8, 5)
+            plt.imshow(target_img11, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
-            plt.subplot(2, 6, 6)
-            plt.imshow(pred_target_final_img1, cmap='viridis')
-            plt.title('vil_pred Data')
-            plt.colorbar()
+            plt.subplot(2, 8, 6)
+            plt.imshow(pred_target_final_img11, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
-            plt.subplot(2, 6, 7)
-            plt.imshow(input_img21, cmap='viridis')
-            plt.title('vil_0min Data')
-            plt.colorbar()
+            plt.subplot(2, 8, 7)
+            plt.imshow(target_img12, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
-            plt.subplot(2, 6, 8)
-            plt.imshow(input_img22, cmap='viridis')
-            plt.title('vil_30min Data')
-            plt.colorbar()
+            plt.subplot(2, 8, 8)
+            plt.imshow(pred_target_final_img12, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
+            plt.subplot(2, 8, 9)
+            plt.imshow(input_img21, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
-            plt.subplot(2, 6, 9)
-            plt.imshow(input_img23, cmap='viridis')
-            plt.title('vil_60min Data')
-            plt.colorbar()
+            plt.subplot(2, 8, 10)
+            plt.imshow(input_img22, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
-            plt.subplot(2, 6, 10)
-            plt.imshow(input_img24, cmap='viridis')
-            plt.title('vil_90min Data')
-            plt.colorbar()
+            plt.subplot(2, 8, 11)
+            plt.imshow(input_img23, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
-            plt.subplot(2, 6, 11)
-            plt.imshow(target_img2, cmap='viridis')
-            plt.title('vil_gt Data')
-            plt.colorbar()
+            plt.subplot(2, 8, 12)
+            plt.imshow(input_img24, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
-            plt.subplot(2, 6, 12)
-            plt.imshow(pred_target_final_img2, cmap='viridis')
-            plt.title('vil_pred Data')
-            plt.colorbar()
+            plt.subplot(2, 8, 13)
+            plt.imshow(target_img21, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
+            plt.subplot(2, 8, 14)
+            plt.imshow(pred_target_final_img21, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
+
+            plt.subplot(2, 8, 15)
+            plt.imshow(target_img22, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
+            plt.subplot(2, 8, 16)
+            plt.imshow(pred_target_final_img22, cmap=vil_cmap, norm=vil_norm)
+            plt.axis('off')
 
             plt.tight_layout()
         
             save_path_img = os.path.join(save_path, 'vil_predict', mode, 'Epoch{}'.format(epoch))
             if not os.path.exists(save_path_img):
                 os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image1{:04d}'.format(idx)), target_img21.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image1{:04d}'.format(idx)), pred_target_final_img21.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'target_image2{:04d}'.format(idx)), target_img22.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image2{:04d}'.format(idx)), pred_target_final_img22.cpu().numpy())
+        
+        elif data_type == 'ir_predict':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img13 = input_img1[0][:,:,2]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img14 = input_img1[0][:,:,3]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img23 = input_img2[0][:,:,2]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img24 = input_img2[0][:,:,3]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            target_img11 = target_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            target_img12 = target_img1[0][:,:,1]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            target_img21 = target_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            target_img22 = target_img2[0][:,:,1]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+
+            pred_target_img11 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            pred_target_img12 = pred_target_img1[0][:,:,1]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            
+            pred_target_final_img11 = target_img11 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img11 * (target_img1_mask[0][:,:,0])
+            pred_target_final_img12 = target_img12 * (1 - target_img1_mask[0][:,:,1]) + pred_target_img12 * (target_img1_mask[0][:,:,1])
+            pred_target_img21 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            pred_target_img22 = pred_target_img2[0][:,:,1]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            
+            pred_target_final_img21 = target_img21 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img21 * (target_img2_mask[0][:,:,0])
+            pred_target_final_img22 = target_img22 * (1 - target_img2_mask[0][:,:,1]) + pred_target_img22 * (target_img2_mask[0][:,:,1])
+            plt.figure(figsize=(40, 8))
+            plt.subplot(2, 8, 1)
+            plt.imshow(input_img11, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('ir069_0min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 2)
+            plt.imshow(input_img12, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('ir069_30min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 3)
+            plt.imshow(input_img13, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('ir069_60min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 4)
+            plt.imshow(input_img14, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_90min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 5)
+            plt.imshow(target_img11, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_gt Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 6)
+            plt.imshow(pred_target_final_img11, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 7)
+            plt.imshow(target_img12, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 8)
+            plt.imshow(pred_target_final_img12, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 9)
+            plt.imshow(input_img21, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_0min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 10)
+            plt.imshow(input_img22, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_30min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 11)
+            plt.imshow(input_img23, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_60min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 12)
+            plt.imshow(input_img24, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_90min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 13)
+            plt.imshow(target_img21, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_gt Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 14)
+            plt.imshow(pred_target_final_img21, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 15)
+            plt.imshow(target_img22, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 16)
+            plt.imshow(pred_target_final_img22, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'ir069_predict', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image1{:04d}'.format(idx)), target_img21.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image1{:04d}'.format(idx)), pred_target_final_img21.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'target_image2{:04d}'.format(idx)), target_img22.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image2{:04d}'.format(idx)), pred_target_final_img22.cpu().numpy())
+        
+        elif data_type == 'ir107_predict':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img13 = input_img1[0][:,:,2]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img14 = input_img1[0][:,:,3]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img23 = input_img2[0][:,:,2]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img24 = input_img2[0][:,:,3]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            target_img11 = target_img1[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            target_img12 = target_img1[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            target_img21 = target_img2[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            target_img22 = target_img2[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+
+            pred_target_img11 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            pred_target_img12 = pred_target_img1[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            
+            pred_target_final_img11 = target_img11 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img11 * (target_img1_mask[0][:,:,0])
+            pred_target_final_img12 = target_img12 * (1 - target_img1_mask[0][:,:,1]) + pred_target_img12 * (target_img1_mask[0][:,:,1])
+            pred_target_img21 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            pred_target_img22 = pred_target_img2[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            
+            pred_target_final_img21 = target_img21 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img21 * (target_img2_mask[0][:,:,0])
+            pred_target_final_img22 = target_img22 * (1 - target_img2_mask[0][:,:,1]) + pred_target_img22 * (target_img2_mask[0][:,:,1])
+            plt.figure(figsize=(40, 8))
+            plt.subplot(2, 8, 1)
+            plt.imshow(input_img11, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('ir069_0min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 2)
+            plt.imshow(input_img12, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('ir069_30min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 3)
+            plt.imshow(input_img13, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('ir069_60min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 4)
+            plt.imshow(input_img14, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_90min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 5)
+            plt.imshow(target_img11, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_gt Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 6)
+            plt.imshow(pred_target_final_img11, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 7)
+            plt.imshow(target_img12, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 8)
+            plt.imshow(pred_target_final_img12, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 9)
+            plt.imshow(input_img21, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_0min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 10)
+            plt.imshow(input_img22, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_30min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 11)
+            plt.imshow(input_img23, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_60min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 12)
+            plt.imshow(input_img24, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_90min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 13)
+            plt.imshow(target_img21, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_gt Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 14)
+            plt.imshow(pred_target_final_img21, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 15)
+            plt.imshow(target_img22, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 16)
+            plt.imshow(pred_target_final_img22, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('vil_pred Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'ir107_predict', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image1{:04d}'.format(idx)), target_img21.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image1{:04d}'.format(idx)), pred_target_final_img21.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'target_image2{:04d}'.format(idx)), target_img22.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image2{:04d}'.format(idx)), pred_target_final_img22.cpu().numpy())
+
+        elif data_type == 'vis_predict':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            input_img13 = input_img1[0][:,:,2]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            input_img14 = input_img1[0][:,:,3]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            input_img23 = input_img2[0][:,:,2]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            input_img24 = input_img2[0][:,:,3]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            target_img11 = target_img1[0][:,:,0]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            target_img12 = target_img1[0][:,:,1]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            target_img21 = target_img2[0][:,:,0]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            target_img22 = target_img2[0][:,:,1]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+
+            pred_target_img11 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            pred_target_img12 = pred_target_img1[0][:,:,1]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            
+            pred_target_final_img11 = target_img11 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img11 * (target_img1_mask[0][:,:,0])
+            pred_target_final_img12 = target_img12 * (1 - target_img1_mask[0][:,:,1]) + pred_target_img12 * (target_img1_mask[0][:,:,1])
+            pred_target_img21 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            pred_target_img22 = pred_target_img2[0][:,:,1]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            
+            pred_target_final_img21 = target_img21 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img21 * (target_img2_mask[0][:,:,0])
+            pred_target_final_img22 = target_img22 * (1 - target_img2_mask[0][:,:,1]) + pred_target_img22 * (target_img2_mask[0][:,:,1])
+            plt.figure(figsize=(40, 8))
+            plt.subplot(2, 8, 1)
+            plt.imshow(input_img11, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_0min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 2)
+            plt.imshow(input_img12, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_30min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 3)
+            plt.imshow(input_img13, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_60min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 4)
+            plt.imshow(input_img14, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_90min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 5)
+            plt.imshow(target_img11, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_gt Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 6)
+            plt.imshow(pred_target_final_img11, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 7)
+            plt.imshow(target_img12, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 8)
+            plt.imshow(pred_target_final_img12, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 9)
+            plt.imshow(input_img21, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_0min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 10)
+            plt.imshow(input_img22, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_30min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 11)
+            plt.imshow(input_img23, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_60min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 12)
+            plt.imshow(input_img24, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_90min Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 13)
+            plt.imshow(target_img21, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_gt Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 14)
+            plt.imshow(pred_target_final_img21, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 15)
+            plt.imshow(target_img22, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 16)
+            plt.imshow(pred_target_final_img22, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_pred Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'vis_predict', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image1{:04d}'.format(idx)), target_img21.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image1{:04d}'.format(idx)), pred_target_final_img21.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'target_image2{:04d}'.format(idx)), target_img22.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image2{:04d}'.format(idx)), pred_target_final_img22.cpu().numpy())
+
+        elif data_type == 'vis_recon':
+            input_img11 = input_img1[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img12 = input_img1[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            input_img21 = input_img2[0][:,:,0]*zscore_normalizations_sevir['ir069']['scale']+zscore_normalizations_sevir['ir069']['shift']
+            input_img22 = input_img2[0][:,:,1]*zscore_normalizations_sevir['ir107']['scale']+zscore_normalizations_sevir['ir107']['shift']
+            target_img1 = target_img1[0][:,:,0]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            target_mask_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0])
+            target_img2 = target_img2[0][:,:,0]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            target_mask_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0])
+
+            pred_target_img1 = pred_target_img1[0][:,:,0]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            pred_target_mask_img1 = pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*zscore_normalizations_sevir['vis']['scale']+zscore_normalizations_sevir['vis']['shift']
+            pred_target_mask_img2 = pred_target_img2 * (target_img2_mask[0][:,:,0])
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR_069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('IR_107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_gt Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_pred Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap=ir069_cmap, norm=ir069_norm)
+            plt.title('IR_069 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap=ir107_cmap, norm=ir107_norm)
+            plt.title('IR_107 Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_gt Data')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap=vis_cmap, norm=vis_norm)
+            plt.title('vis_pred Data')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'vis_recon', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
             
             plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
             plt.close()
-        # input_img1 = input_img1.numpy().astype(np.uint8)
-        # input_img2 = input_img2.numpy().astype(np.uint8)
-
-        # target_img1 = target_img1.numpy().astype(np.uint8)
-        # target_img2 = target_img2.numpy().astype(np.uint8)
-        # target_mask_img1 = target_mask_img1[0].numpy().astype(np.uint8)
-        # target_mask_img2 = target_mask_img2[0].numpy().astype(np.uint8)
-
-        # pred_target_img1 = pred_target_img1.numpy().astype(np.uint8)
-        # pred_target_mask_img1 = pred_target_mask_img1[0].numpy().astype(np.uint8)
-        # pred_target_final_img1 = pred_target_final_img1.numpy().astype(np.uint8)
-        # pred_target_img2 = pred_target_img2.numpy().astype(np.uint8)
-        # pred_target_mask_img2 = pred_target_mask_img2[0].numpy().astype(np.uint8)
-        # pred_target_final_img2 = pred_target_final_img2.numpy().astype(np.uint8)
-
-        # # cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_input_img1_{}.png'.format(idx, deg_type[0])), input_img1)
-        # cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_target_img1.png'.format(idx)), target_img1)
-        # #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_target_mask_img1.png'.format(idx)), target_mask_img1)
-        # #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_img1.png'.format(idx)), pred_target_img1)
-        # #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_mask_img1.png'.format(idx)), pred_target_mask_img1)
-        # #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_fuse_img1.png'.format(idx)), pred_target_final_img1)
-
-        # # cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_input_img2_{}.png'.format(idx, deg_type[0])), input_img2)
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
         
-        # if target_img2_flag:
-        #     cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_target_img2.png'.format(idx)), target_img2)
-        # #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_target_mask_img2.png'.format(idx)), target_mask_img2)
-        # cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_img2.png'.format(idx)), pred_target_img2)
-        # #cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_mask_img2.png'.format(idx)), pred_target_mask_img2)
-        # cv2.imwrite(os.path.join(save_path_img, 'TestID{:04d}_pred_target_fuse_img2.png'.format(idx)), pred_target_final_img2)
+        elif data_type == 'sat_trans':
+            # rainnet 归一化采用最大最小max:140; min:0
+            # nhwc
+            input_img11 = input_img1[0][:,:,0]
+            input_img12 = input_img1[0][:,:,1]
+            input_img13 = input_img1[0][:,:,2]
+            input_img14 = input_img1[0][:,:,3]
+            input_img21 = input_img2[0][:,:,0]
+            input_img22 = input_img2[0][:,:,1]
+            input_img23 = input_img2[0][:,:,2]
+            input_img24 = input_img2[0][:,:,3]
+            target_img11 = target_img1[0][:,:,0]*(max_min_satellite['pct37']['max']-max_min_satellite['pct37']['min'])+max_min_satellite['pct37']['min']
+            target_img12 = target_img1[0][:,:,1]*(max_min_satellite['pct89']['max']-max_min_satellite['pct89']['min'])+max_min_satellite['pct89']['min']
+            target_img21 = target_img2[0][:,:,0]*(max_min_satellite['pct37']['max']-max_min_satellite['pct37']['min'])+max_min_satellite['pct37']['min']
+            target_img22 = target_img2[0][:,:,1]*(max_min_satellite['pct89']['max']-max_min_satellite['pct89']['min'])+max_min_satellite['pct89']['min']
+            pred_target_img11 = pred_target_img1[0][:,:,0]*(max_min_satellite['pct37']['max']-max_min_satellite['pct37']['min'])+max_min_satellite['pct37']['min']
+            pred_target_img12 = pred_target_img1[0][:,:,1]*(max_min_satellite['pct89']['max']-max_min_satellite['pct89']['min'])+max_min_satellite['pct89']['min']
+            pred_target_final_img11 = target_img11 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img11 * (target_img1_mask[0][:,:,0])
+            pred_target_final_img12 = target_img12 * (1 - target_img1_mask[0][:,:,1]) + pred_target_img12 * (target_img1_mask[0][:,:,1])
+            pred_target_img21 = pred_target_img2[0][:,:,0]*(max_min_satellite['pct37']['max']-max_min_satellite['pct37']['min'])+max_min_satellite['pct37']['min']
+            pred_target_img22 = pred_target_img2[0][:,:,1]*(max_min_satellite['pct89']['max']-max_min_satellite['pct89']['min'])+max_min_satellite['pct89']['min']
+            pred_target_final_img21 = target_img21 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img21 * (target_img2_mask[0][:,:,0])
+            pred_target_final_img22 = target_img22 * (1 - target_img2_mask[0][:,:,1]) + pred_target_img22 * (target_img2_mask[0][:,:,1])
+            plt.figure(figsize=(40, 8))
+
+            plt.subplot(2, 8, 1)
+            plt.imshow(input_img11, cmap='inferno')
+            plt.title('mask')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 2)
+            plt.imshow(input_img12, cmap='inferno')
+            plt.title('C07')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 3)
+            plt.imshow(input_img13, cmap='inferno')
+            plt.title('C13')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 4)
+            plt.imshow(input_img14, cmap='inferno')
+            plt.title('C16')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 5)
+            plt.imshow(target_img11, cmap='inferno')
+            plt.title('pct37_gt')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 6)
+            plt.imshow(target_img12, cmap='inferno')
+            plt.title('pct89_gt')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 7)
+            plt.imshow(pred_target_final_img11, cmap='inferno')
+            plt.title('pct37_predict')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 8)
+            plt.imshow(pred_target_final_img12, cmap='inferno')
+            plt.title('pct89_predict')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 9)
+            plt.imshow(input_img21, cmap='inferno')
+            plt.title('mask')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 10)
+            plt.imshow(input_img22, cmap='inferno')
+            plt.title('C07')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 11)
+            plt.imshow(input_img23, cmap='inferno')
+            plt.title('C13')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 12)
+            plt.imshow(input_img24, cmap='inferno')
+            plt.title('C16')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 13)
+            plt.imshow(target_img21, cmap='inferno')
+            plt.title('pct37_gt')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 14)
+            plt.imshow(target_img22, cmap='inferno')
+            plt.title('pct89_gt')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 15)
+            plt.imshow(pred_target_final_img21, cmap='inferno')
+            plt.title('pct37_ppredict')
+            plt.colorbar()
+
+            plt.subplot(2, 8, 16)
+            plt.imshow(pred_target_final_img22, cmap='inferno')
+            plt.title('pct89_predict')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'satellite_trans', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img21.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img21.cpu().numpy())
+
+            np.save(os.path.join(save_path_img, '2target_image{:04d}'.format(idx)), target_img22.cpu().numpy())
+            np.save(os.path.join(save_path_img, '2predict_image{:04d}'.format(idx)), pred_target_final_img22.cpu().numpy())
+
+        elif data_type == 'rain_down_scaling':
+            # satellite_dataset 归一化采用最大最小
+            # nhwc 'min_pct37': 138.643, 'min_pct89': 54.002, 'max_pct37': 350.559, 'max_pct89': 320.947
+            input_img11 = input_img1[0][:,:,0]*50
+            input_img12 = input_img1[0][:,:,1]*50
+            input_img21 = input_img2[0][:,:,0]*50
+            input_img22 = input_img2[0][:,:,1]*50
+            target_img1 = target_img1[0][:,:,0]*50
+            target_img2 = target_img2[0][:,:,0]*50
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]*140
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]*140
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap='viridis')
+            plt.title('low_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap='viridis')
+            plt.title('low_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap='viridis')
+            plt.title('high_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap='viridis')
+            plt.title('high_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap='viridis')
+            plt.title('low_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap='viridis')
+            plt.title('low_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap='viridis')
+            plt.title('high_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap='viridis')
+            plt.title('high_level')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'rainnet_down_scaling', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
+
+        elif data_type == 'NO2':
+            # satellite_dataset 归一化采用最大最小
+            # nhwc 'min_pct37': 138.643, 'min_pct89': 54.002, 'max_pct37': 350.559, 'max_pct89': 320.947
+            input_img11 = input_img1[0][:,:,0]
+            input_img12 = input_img1[0][:,:,1]
+            input_img21 = input_img2[0][:,:,0]
+            input_img22 = input_img2[0][:,:,1]
+            target_img1 = target_img1[0][:,:,0]
+            target_img2 = target_img2[0][:,:,0]
+            
+            pred_target_img1 = pred_target_img1[0][:,:,0]
+            pred_target_final_img1 = target_img1 * (1 - target_img1_mask[0][:,:,0]) + pred_target_img1 * (target_img1_mask[0][:,:,0])
+            pred_target_img2 = pred_target_img2[0][:,:,0]
+            pred_target_final_img2 = target_img2 * (1 - target_img2_mask[0][:,:,0]) + pred_target_img2 * (target_img2_mask[0][:,:,0])
+            plt.figure(figsize=(20, 8))
+            plt.subplot(2, 4, 1)
+            plt.imshow(input_img11, cmap='viridis')
+            plt.title('low_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 2)
+            plt.imshow(input_img12, cmap='viridis')
+            plt.title('low_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 3)
+            plt.imshow(target_img1, cmap='viridis')
+            plt.title('high_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 4)
+            plt.imshow(pred_target_final_img1, cmap='viridis')
+            plt.title('high_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 5)
+            plt.imshow(input_img21, cmap='viridis')
+            plt.title('low_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 6)
+            plt.imshow(input_img22, cmap='viridis')
+            plt.title('low_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 7)
+            plt.imshow(target_img2, cmap='viridis')
+            plt.title('high_level')
+            plt.colorbar()
+
+            plt.subplot(2, 4, 8)
+            plt.imshow(pred_target_final_img2, cmap='viridis')
+            plt.title('high_level')
+            plt.colorbar()
+
+            plt.tight_layout()
+        
+            save_path_img = os.path.join(save_path, 'no2_trans', mode, 'Epoch{}'.format(epoch))
+            if not os.path.exists(save_path_img):
+                os.makedirs(save_path_img)
+            plt.savefig(os.path.join(save_path_img, 'fusion{:04d}.png'.format(idx)))
+            plt.close()
+            np.save(os.path.join(save_path_img, 'target_image{:04d}'.format(idx)), target_img2.cpu().numpy())
+            np.save(os.path.join(save_path_img, 'predict_image{:04d}'.format(idx)), pred_target_final_img2.cpu().numpy())
+        
 
 def val_model_CNN_Head_ExtraSaveOutput(model, data_loader_val, epoch, save_path, mode='val_pretrain', patch_size=16):
     if mode == 'val_pretrain':

@@ -86,7 +86,6 @@ def train_one_epoch(model: torch.nn.Module,
             lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
         with torch.cuda.amp.autocast():
             loss_dict = model(samples, visual_tokens)[0]
-            print(loss_dict)
         loss = torch.stack([loss_dict[l] for l in loss_dict if 'unscaled' not in l]).sum()
         loss_value = loss.item()
 

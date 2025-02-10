@@ -1,0 +1,145 @@
+using dsdsds
+using dsdsds
+using dsdsds
+using dsdsds
+job dir: /mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new
+Namespace(save_ckpt_freq=1,
+batch_size=20,
+epochs=30,
+accum_iter=4,
+model='mae_vit_large_patch16_dec512d8b_input256',
+input_size=256,
+mask_ratio=0.75,
+ckpt='/mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/experiments/weather_5tasks/checkpoint-49.pth',
+weight_decay=0.05,
+lr=None,
+blr=0.0001,
+min_lr=1e-05,
+warmup_epochs=1,
+break_after_epoch=None,
+data_path='/mnt/petrelfs/zhaoxiangyu1/data/Test100_256',
+data_path_val='/mnt/petrelfs/zhaoxiangyu1/data/Test100_256',
+imagenet_percent=1,
+subsample=False,
+output_dir='experiments/large_model_RAG/tasks',
+log_dir='./output_dir',
+device='cuda',
+seed=0,
+resume='',
+start_epoch=0,
+num_workers=1,
+pin_mem=True,
+world_size=1,
+local_rank=-1,
+dist_on_itp=False,
+dist_url='env://')
+preparing data ...
+
+my_level    TD    TS    C1   C2   C3   C4   C5  Total
+Train     2907  3281   786  448  331  318   82   8153
+Valid      942  1072   272  127  120  112   46   2691
+Test       905  1120   257  169  129   91   32   2703
+Total     4754  5473  1315  744  580  521  160  13547
+
+ATCF_ID_list_train ∩ valid: set()
+ATCF_ID_list_train ∩ test: set()
+ATCF_ID_list_valid ∩ test: set()
+ATCF_ID_list_test includes ATCF ID in must_in_test: True
+
+min:
+min_C07: 172.752
+min_C08: 172.197
+min_C09: 172.296
+min_C10: 175.511
+min_C12: 179.553
+min_C13: 175.560
+min_C14: 176.295
+min_C15: 174.172
+min_C16: 170.838
+min_pct37: 138.643
+min_pct89: 54.002
+min_precip: 0.000
+min_terra: 0.000
+
+max:
+max_C07: 359.456
+max_C08: 324.413
+max_C09: 316.124
+max_C10: 290.336
+max_C12: 284.381
+max_C13: 318.761
+max_C14: 317.384
+max_C15: 319.212
+max_C16: 299.252
+max_pct37: 350.559
+max_pct89: 320.947
+max_precip: 147.140
+max_terra: 7891.156
+
+2400
+Head: Simple_Head
+Load pretrained model:  /mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/experiments/weather_5tasks/checkpoint-49.pth
+<All keys matched successfully>
+Model = MaskedAutoencoderViT(
+  (patch_embed): PatchEmbed(
+    (proj): Conv2d(2, 1024, kernel_size=(16, 16), stride=(16, 16))
+    (norm): Identity()
+  )
+  (patch_embed_4c): PatchEmbed(
+    (proj): Conv2d(4, 1024, kernel_size=(16, 16), stride=(16, 16))
+    (norm): Identity()
+  )
+  (align_patch): Linear(in_features=1024, out_features=1024, bias=True)
+  (blocks): ModuleList(
+    (0-23): 24 x Block(
+      (norm1): LayerNorm((1024,), eps=1e-06, elementwise_affine=True)
+      (attn): Attention(
+        (qkv): Linear(in_features=1024, out_features=3072, bias=True)
+        (attn_drop): Dropout(p=0.0, inplace=False)
+        (proj): Linear(in_features=1024, out_features=1024, bias=True)
+        (proj_drop): Dropout(p=0.0, inplace=False)
+      )
+      (drop_path): Identity()
+      (norm2): LayerNorm((1024,), eps=1e-06, elementwise_affine=True)
+      (mlp): Mlp(
+        (fc1): Linear(in_features=1024, out_features=4096, bias=True)
+        (act): GELU(approximate='none')
+        (drop1): Dropout(p=0.0, inplace=False)
+        (fc2): Linear(in_features=4096, out_features=1024, bias=True)
+        (drop2): Dropout(p=0.0, inplace=False)
+      )
+    )
+  )
+  (norm): LayerNorm((1024,), eps=1e-06, elementwise_affine=True)
+  (decoder_embed): Linear(in_features=1024, out_features=512, bias=True)
+  (decoder_blocks): ModuleList(
+    (0-7): 8 x Block(
+      (norm1): LayerNorm((512,), eps=1e-06, elementwise_affine=True)
+      (attn): Attention(
+        (qkv): Linear(in_features=512, out_features=1536, bias=True)
+        (attn_drop): Dropout(p=0.0, inplace=False)
+        (proj): Linear(in_features=512, out_features=512, bias=True)
+        (proj_drop): Dropout(p=0.0, inplace=False)
+      )
+      (drop_path): Identity()
+      (norm2): LayerNorm((512,), eps=1e-06, elementwise_affine=True)
+      (mlp): Mlp(
+        (fc1): Linear(in_features=512, out_features=2048, bias=True)
+        (act): GELU(approximate='none')
+        (drop1): Dropout(p=0.0, inplace=False)
+        (fc2): Linear(in_features=2048, out_features=512, bias=True)
+        (drop2): Dropout(p=0.0, inplace=False)
+      )
+    )
+  )
+  (decoder_norm): LayerNorm((512,), eps=1e-06, elementwise_affine=True)
+  (decoder_pred): Linear(in_features=512, out_features=512, bias=True)
+  (decoder_pred_4c): Linear(in_features=512, out_features=1024, bias=True)
+  (CNN_Head): Simple_Head(
+    (conv_first): Conv2d(2, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (HRconv): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (conv_last): Conv2d(64, 2, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (lrelu): LeakyReLU(negative_slope=0.1, inplace=True)
+  )
+  (L1_loss): L1Loss()
+)

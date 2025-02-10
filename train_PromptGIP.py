@@ -20,6 +20,7 @@ import dataset.lowlevel_PromtGIP_dataloader as lowlevel_prompt_dataloader
 from evaluation_prompt import *
 from dataset.rainnet_dataloader import RainNetDataset
 from dataset.satellite_dataloader import MyDataset
+from dataset.apd_dataloader import APDataset
 
 from petrel_client.client import Client
 
@@ -41,6 +42,8 @@ def get_args_parser():
 
     parser.add_argument('--input_size', default=224, type=int,
                         help='images input size')
+    parser.add_argument('--notfinetune', action='store_false')
+    parser.set_defaults(notfinetune=True)
 
     parser.add_argument('--mask_ratio', default=0.75, type=float,
                         help='Masking ratio (percentage of removed patches).')
@@ -122,29 +125,27 @@ def main(args):
     dataset_train1 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='sevir',input_size=args.input_size,
                                                                    phase='train',task='sevir')
     dataset_train2 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='ir_trans',input_size=args.input_size,
-                                                                   phase='train',task='trans')
+                                                                   phase='train',task='trans', not_finetune=args.notfinetune)
     dataset_train3 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='inter',input_size=args.input_size,
-                                                                   phase='train',task='inter')
+                                                                   phase='train',task='inter', not_finetune=args.notfinetune)
     dataset_train4 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='down_scaling_vil',input_size=args.input_size,
-                                                                   phase='train',task='down_scaling')
+                                                                   phase='train',task='down_scaling', not_finetune=args.notfinetune)
     dataset_train5 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='vis_recon',input_size=args.input_size,
-                                                                   phase='train',task='down_scaling')
+                                                                   phase='train',task='down_scaling', not_finetune=args.notfinetune)
     dataset_train6 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='down_scaling_ir',input_size=args.input_size,
-                                                                   phase='train',task='down_scaling')
+                                                                   phase='train',task='down_scaling', not_finetune=args.notfinetune)
     dataset_train7 = lowlevel_prompt_dataloader.Dataset_dblur(split='train')
     # 4 channels dataset
     dataset_train_4c1 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='ir_predict',input_size=args.input_size,
-                                                                   phase = 'train',task='predict')
+                                                                   phase = 'train',task='predict', not_finetune=args.notfinetune)
     dataset_train_4c2 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='predict',input_size=args.input_size,
                                                                    phase = 'train',task='predict')
-    # rainnet_dataset
-    dataset_train8 = RainNetDataset('train', frame=4, is_crop=True)
-    # satellite_dataset
-    dataset_train_4c3 = MyDataset('train')
+    # NO2_dataset
+    dataset_train9 = APDataset(split='train')
 
     dataset_train_2c = dataset_train1+dataset_train2+dataset_train3+dataset_train4+dataset_train5+\
-                        dataset_train6+dataset_train7+dataset_train8
-    dataset_train_4c = dataset_train_4c1+dataset_train_4c2+dataset_train_4c3
+                        dataset_train6+dataset_train7+dataset_train9
+    dataset_train_4c = dataset_train_4c1+dataset_train_4c2
     print(dataset_train_2c.__len__())
     # dataset_train_2c = dataset_train_4c
     print(dataset_train_4c.__len__())
@@ -158,7 +159,15 @@ def main(args):
     dataset_val4 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='down_scaling_vil',input_size=args.input_size,
                                                                  phase='val',task='down_scaling')
     dataset_val5 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='predict',input_size=args.input_size,
-                                                                 phase='val',task='predict')   
+                                                                 phase='val',task='predict')
+    dataset_val6 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='down_scaling_ir',input_size=args.input_size,
+                                                                 phase='val',task='down_scaling')
+    dataset_val7 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='ir_predict',input_size=args.input_size,
+                                                                 phase='val',task='ir_predict')
+    dataset_val8 = lowlevel_prompt_dataloader.DatasetSevir_Train(data_path='vis_recon',input_size=args.input_size,
+                                                                 phase='val',task='vis_recon')
+    dataset_val9 = lowlevel_prompt_dataloader.Dataset_dblur(split='val')
+
     print(dataset_val1.__len__())
 
     # single | mix | mismatch_single | UDC_Toled | UDC_Poled | Rain100L | Rain100H | Test100 | Test1200
@@ -202,7 +211,7 @@ def main(args):
     
     data_loader_val1 = torch.utils.data.DataLoader(
         dataset_val1,
-        batch_size=1,
+        batch_size=24,
         num_workers=0,
         pin_memory=True,
         drop_last=False,
@@ -210,7 +219,7 @@ def main(args):
 
     data_loader_val2 = torch.utils.data.DataLoader(
         dataset_val2,
-        batch_size=1,
+        batch_size=24,
         num_workers=0,
         pin_memory=True,
         drop_last=False,
@@ -218,7 +227,7 @@ def main(args):
     
     data_loader_val3 = torch.utils.data.DataLoader(
         dataset_val3,
-        batch_size=1,
+        batch_size=24,
         num_workers=0,
         pin_memory=True,
         drop_last=False,
@@ -226,7 +235,7 @@ def main(args):
 
     data_loader_val4 = torch.utils.data.DataLoader(
         dataset_val4,
-        batch_size=1,
+        batch_size=24,
         num_workers=0,
         pin_memory=True,
         drop_last=False,
@@ -234,7 +243,37 @@ def main(args):
 
     data_loader_val5 = torch.utils.data.DataLoader(
         dataset_val5,
-        batch_size=1,
+        batch_size=24,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=False,
+    )
+
+    data_loader_val6 = torch.utils.data.DataLoader(
+        dataset_val6,
+        batch_size=24,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=False,
+    )
+
+    data_loader_val7 = torch.utils.data.DataLoader(
+        dataset_val7,
+        batch_size=24,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=False,
+    )
+    data_loader_val8 = torch.utils.data.DataLoader(
+        dataset_val8,
+        batch_size=24,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=False,
+    )
+    data_loader_val9 = torch.utils.data.DataLoader(
+        dataset_val9,
+        batch_size=24,
         num_workers=0,
         pin_memory=True,
         drop_last=False,
@@ -291,6 +330,7 @@ def main(args):
             data_loader_train.sampler.set_epoch(epoch)
             if data_loader_train_4c is not None:
                 data_loader_train_4c.sampler.set_epoch(epoch)
+
         train_one_epoch(
             model, data_loader_train,
             optimizer, device, epoch, loss_scaler,
@@ -315,6 +355,12 @@ def main(args):
                                patch_size=16, data_type='down_scaling_vil')
         val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val5, epoch, args.output_dir, mode='val_test', 
                                patch_size=16, data_type='predict')
+        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val6, epoch, args.output_dir, mode='val_test', 
+                               patch_size=16, data_type='down_scaling_ir')
+        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val7, epoch, args.output_dir, mode='val_test', 
+                               patch_size=16, data_type='ir_predict')
+        val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val8, epoch, args.output_dir, mode='val_test', 
+                               patch_size=16, data_type='vis_recon')
         # val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val3, epoch, args.output_dir, mode='val_test', 
         #                        patch_size=16, data_type='inter')
         # val_on_master_CNN_Head(model_without_ddp.cuda(), data_loader_val_single, epoch, args.output_dir, mode='val_test_single', patch_size=16)

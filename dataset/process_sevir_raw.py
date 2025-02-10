@@ -26,7 +26,7 @@ client = Client(conf_path="~/petreloss.conf")
 parser = ArgumentParser()
 parser.add_argument("-dataMod", "--dataMod", default="test", help="test or train data to work on",
     choices=["train", "test"])
-parser.add_argument("-dirBase", "--dirBase", default="s3://sevir_raw",
+parser.add_argument("-dirBase", "--dirBase", default="/mnt/petrelfs/zhaoxiangyu1/",
     help="Base directory where all other data is kept in")
 parser.add_argument("-dirOut", "--dirOut", default= "/mnt/petrelfs/zhaoxiangyu1/sevir_process/", 
     help="Sub directory where the data will be written!")
@@ -46,7 +46,7 @@ cat_noZero = catalog[catalog['pct_missing']==0.0]
 print("Events with no missing value: ", cat_noZero.shape)
 
 # 2) Filter for having 4 modalities as ['ir069','ir107','vil', 'lght']
-img_types = set(['vis','ir069','ir107','vil'])
+img_types = set(['vis','ir069','ir107','vil', 'lght'])
 
 # Group by event id, and filter to only events that have all desired img_types
 events = cat_noZero.groupby('id').filter(lambda x: img_types.issubset(set(x['img_type']))).groupby('id')

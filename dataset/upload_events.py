@@ -31,6 +31,7 @@ frames4ir = ['0101_0430', '0501_0831', '0901_1231']
 events_type = ['STORMEVENTS', 'RANDOMEVENTS']
 raw_url = 's3://sevir_raw'
 tensor_url = 's3://sevir_pair/'
+predict_frame = ['nowcast_training_000','nowcast_testing_000']
 vis_frame= ['SEVIR_VIS_RANDOMEVENTS_2018_0321_0331',
 'SEVIR_VIS_RANDOMEVENTS_2018_0401_0410',
 'SEVIR_VIS_RANDOMEVENTS_2018_0411_0420',
@@ -114,41 +115,47 @@ vis_frame2 = ['SEVIR_VIS_RANDOMEVENTS_2019_0101_0110',
 'SEVIR_VIS_STORMEVENTS_2019_0901_0930',
 ]
 task = 'other'
-for data_type in variable:
-    for year in years:
-        if task == 'vis':
-            if year=='2018':
-                vis_frames = vis_frame
+if task == 'predict':
+    frames = predict_frame
+    for frame in frames:
+        path = f'{raw_url}/data/processed/{frame}.h5.tar.gz'
+
+else:
+    for data_type in variable:
+        for year in years:
+            if task == 'vis':
+                if year=='2018':
+                    vis_frames = vis_frame
+                else:
+                    vis_frames = vis_frame2
+                for frame in vis_frames:
+                    path = f'{raw_url}/data/{data_type}/{year}/{frame}.h5'
+                    print(path)
+                    data = io.BytesIO(client.get(path))
+                    ff = h5py.File(data, 'r')
+                    a,b = ff
+                    list_id = ff[a]
+                    list_value = ff[b]
+                    for x,y in tqdm(zip(list_id, list_value)):
+                        buffer = io.BytesIO()
+                        path = f"{tensor_url}/{b}/{year}/{x.decode('utf-8')}.npy"
+                        np.save(buffer, y)
+                        # 获取保存后的字节数据
+                        bytes_data = buffer.getvalue()
+                        client.put(path, bytes_data)
             else:
-                vis_frames = vis_frame2
-            for frame in vis_frames:
-                path = f'{raw_url}/data/{data_type}/{year}/{frame}.h5'
-                print(path)
-                data = io.BytesIO(client.get(path))
-                ff = h5py.File(data, 'r')
-                a,b = ff
-                list_id = ff[a]
-                list_value = ff[b]
-                for x,y in tqdm(zip(list_id, list_value)):
-                    buffer = io.BytesIO()
-                    path = f"{tensor_url}/{b}/{year}/{x.decode('utf-8')}.npy"
-                    np.save(buffer, y)
-                    # 获取保存后的字节数据
-                    bytes_data = buffer.getvalue()
-                    client.put(path, bytes_data)
-        else:
-            for frame in frames:
-                path = f'{raw_url}/data/{data_type}/{year}/SEVIR_{data_type.upper()}_STORMEVENTS_{year}_{frame}.h5'
-                print(path)
-                data = io.BytesIO(client.get(path))
-                ff = h5py.File(data, 'r')
-                a,b = ff
-                list_id = ff[a]
-                list_value = ff[b]
-                for x,y in tqdm(zip(list_id, list_value)):
-                    buffer = io.BytesIO()
-                    path = f"{tensor_url}/{b}/{year}/{x.decode('utf-8')}.npy"
-                    np.save(buffer, y)
-                    # 获取保存后的字节数据
-                    bytes_data = buffer.getvalue()
-                    client.put(path, bytes_data)
+                for frame in frames:
+                    path = f'{raw_url}/data/{data_type}/{year}/SEVIR_{data_type.upper()}_STORMEVENTS_{year}_{frame}.h5'
+                    print(path)
+                    data = io.BytesIO(client.get(path))
+                    ff = h5py.File(data, 'r')
+                    a,b = ff
+                    list_id = ff[a]
+                    list_value = ff[b]
+                    for x,y in tqdm(zip(list_id, list_value)):
+                        buffer = io.BytesIO()
+                        path = f"{tensor_url}/{b}/{year}/{x.decode('utf-8')}.npy"
+                        np.save(buffer, y)
+                        # 获取保存后的字节数据
+                        bytes_data = buffer.getvalue()
+                        client.put(path, bytes_data)

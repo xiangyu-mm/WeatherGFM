@@ -18,7 +18,7 @@ class RainNetDataset(data.Dataset):
     def __init__(self,split='train', frame=1, is_crop=True, crop_size_gt=512, upscale_factor=3, is_augment=False ,rotation=False, flip=False):
         # Note crop_size_gt in here is high_resolution image shape[crop_size_gt, crop_size_gt]
         super(RainNetDataset,self).__init__()
-        self.name_list = RainNet_from_folder()
+        self.name_list = RainNet_from_folder(split)
         self.split = split
         self.len = len(self.name_list)
         self.frame = frame
@@ -34,7 +34,7 @@ class RainNetDataset(data.Dataset):
         self.low_res_mean = 0.5506
         self.low_res_std = 0.2375
         
-        self.max = 140.0
+        self.max = 50.0
         self.min = 0.0
 
     def get_item(self,index):
@@ -73,7 +73,7 @@ class RainNetDataset(data.Dataset):
         file = self.get_item(id)
         random_index = random.randint(0, self.len-1)
         random_file = self.get_item(random_index)
-        deg_type = 'lr_trans'
+        deg_type = 'rain_down_scaling'
         img_hr, img_lr = file
         context_img_hr, context_img_lr = random_file
         img_hr = img_hr[frame_id,:,:]
@@ -113,11 +113,13 @@ class RainNetDataset(data.Dataset):
 #     highres = f['highres']
 #     lowres = f['lowres']
 #     return highres,lowres
-def RainNet_from_folder():
+def RainNet_from_folder(split):
     df = pd.read_csv('/mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/dataset/Rainnet.csv')
     name_list = df['name'].tolist()
-
-    return name_list
+    if split == 'train':
+        return name_list[:14688]
+    else:
+        return name_list[14688:]
 
 # This is from original code (Doing random_crop to given shape while upscale_factor=3)
 def random_crop(GT_img, LR_img, GT_crop_size,upscale_factor):

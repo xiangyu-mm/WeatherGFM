@@ -4,6 +4,7 @@ import numpy as np
 import os
 import time
 from pathlib import Path
+import json
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -18,6 +19,18 @@ import dataset.lowlevel_PromtGIP_dataloader as lowlevel_prompt_dataloader
 from evaluation_prompt import *
 from sklearn.metrics import mean_squared_error
 
+zscore_normalizations_sevir = {
+    'vil':{'scale':47.54,'shift':33.44},
+    'ir069':{'scale':1174.68,'shift':-3683.58},
+    'ir107':{'scale':2562.43,'shift':-1552.80},
+    'lght':{'scale':0.60517,'shift':0.02990},
+    'vis':{'scale':2259.96,'shift':-1347.91}
+}
+
+max_min_satellite = {
+    'pct37':{'max':350.559, 'min':138.643},
+    'pct89':{'max':320.947, 'min':54.002}
+}
 def get_args():
     parser = argparse.ArgumentParser('MAE pre-training', add_help=False)
     parser.add_argument('--model', default='mae_vit_small_patch16', type=str, metavar='MODEL',
@@ -38,259 +51,243 @@ def get_args():
     parser.set_defaults(autoregressive=False)
     return parser
 
+@torch.jit.script
+def lat(j: torch.Tensor, num_lat: int) -> torch.Tensor:
+    return 90. - j * 180./float(num_lat-1)
 
-def main(args):
-    device = torch.device(args.device)
+@torch.jit.script
+def latitude_weighting_factor_torch(j: torch.Tensor, num_lat: int, s: torch.Tensor) -> torch.Tensor:
+    return num_lat * torch.cos(3.1416/180. * lat(j, num_lat))/s
 
-    # fix the seed for reproducibility
-    seed = args.seed + misc.get_rank()
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-
-    cudnn.benchmark = True
-
+def weighted_acc_torch(pred: torch.Tensor, target: torch.Tensor, data_mask=None) -> torch.Tensor:
+    # import pdb
+    # pdb.set_trace()
+    num_lat = 128
+    #num_long = target.shape[2]
+    lat_t = torch.arange(start=0, end=num_lat, device=pred.device)
+    s = torch.sum(torch.cos(3.1416/180. * lat(lat_t, num_lat)))
+    weight = torch.reshape(latitude_weighting_factor_torch(lat_t, num_lat, s), (1, 1, -1, 1))
     
-    
-    
-    degradation_type_list = ['GaussianNoise', 'GaussianBlur', 'JPEG', 'Resize', 
-                                 'Rain', 'SPNoise', 'LowLight', 'PoissonNoise', 'Ringing',
-                                 'r_l', 'Inpainting']
-    
-    degradation_type = args.degradation_type
-    if degradation_type in degradation_type_list:
-        dataset_path_HQ = '/nvme/liuyihao/DATA/Common528/Image_clean_256x256'
-        dataset_path_LQ = '/nvme/liuyihao/DATA/Common528/{}'.format(degradation_type)
-    elif degradation_type == 'Test100':
-        dataset_path_HQ = '/nvme/liuyihao/DATA/Test100_256/target'
-        dataset_path_LQ = '/nvme/liuyihao/DATA/Test100_256/input'
-    elif degradation_type == 'SOTS':
-        dataset_path_HQ = '/nvme/liuyihao/DATA/SOTS_256/gt'
-        dataset_path_LQ = '/nvme/liuyihao/DATA/SOTS_256/hazy'
-    elif degradation_type == 'LOL':
-        dataset_path_HQ = '/nvme/liuyihao/DATA/LOL_256/eval15/high'
-        dataset_path_LQ = '/nvme/liuyihao/DATA/LOL_256/eval15/low'
-    elif degradation_type == 'Canny':
-        dataset_path_HQ = '/nvme/liuyihao/DATA/Common528/Canny'
-        dataset_path_LQ = '/nvme/liuyihao/DATA/Common528/Image_clean_256x256'
-    elif degradation_type == 'LLF':
-        dataset_path_HQ = '/nvme/liuyihao/DATA/LLF_256/gt'
-        dataset_path_LQ = '/nvme/liuyihao/DATA/LLF_256/input'
-    elif degradation_type == 'Laplacian':
-        dataset_path_HQ = '/nvme/liuyihao/DATA/Common528/Laplacian'
-        dataset_path_LQ = '/nvme/liuyihao/DATA/Common528/Image_clean_256x256'
-    elif degradation_type == 'L0_smooth':
-        dataset_path_HQ = '/nvme/liuyihao/DATA/Common528/L0_smooth'
-        dataset_path_LQ = '/nvme/liuyihao/DATA/Common528/Image_clean_256x256'
-    
-    dataset_val = lowlevel_prompt_dataloader.DatasetLowlevel_Customized_Val_original_size(dataset_path_HQ=dataset_path_HQ, 
-                                                                                 dataset_path_LQ=dataset_path_LQ, 
-                                                                                 dataset_type=degradation_type,
-                                                                                 data_len=None,
-                                                                                 prompt_id = args.prompt_id)
-    
-    data_loader_val = torch.utils.data.DataLoader(
-        dataset_val,
-        batch_size=1,
-        num_workers=0,
-        pin_memory=True,
-        drop_last=False,
-    )
+    if data_mask is not None:
+        numerator  = torch.sum(weight * pred*data_mask* target, dim=(-1,-2))
+        denominator = torch.sqrt(torch.sum(weight * pred*data_mask* pred, dim=(-1,-2)) * torch.sum(weight * target* data_mask* target, dim=(-1,-2)))
+        return numerator/denominator
+    else:
+        # import pdb
+        # pdb.set_trace()
+        result = torch.sum(weight * pred * target, dim=(-1,-2)) / torch.sqrt(torch.sum(weight * pred **2, dim=(-1,-2)) * torch.sum(weight * target ** 2, dim=(-1,-2)))
+        return result
 
-    # build model
-    print('Model: ', models_mae_PromptGIP_CNN_Head)
-    model = getattr(models_mae_PromptGIP_CNN_Head, args.model)()
-    # load model
-    checkpoint = torch.load(args.ckpt, map_location='cpu')
-    msg = model.load_state_dict(checkpoint['model'], strict=True)
-    print(msg)
-    model.to(device)
+def weighted_rmse_torch(pred: torch.Tensor, target: torch.Tensor, data_mask=None) -> torch.Tensor:
+    #takes in arrays of size [n, c, h, w]  and returns latitude-weighted rmse for each chann
+    num_lat = 128
+    #num_long = target.shape[2]
+    lat_t = torch.arange(start=0, end=num_lat, device=pred.device)
 
+    s = torch.sum(torch.cos(3.1416/180. * lat(lat_t, num_lat)))
+    weight = torch.reshape(latitude_weighting_factor_torch(lat_t, num_lat, s), (1, 1, -1, 1))
 
+    if data_mask is not None:
+        result = torch.sqrt(torch.sum(weight * ((pred - target)*data_mask)**2, dim=(-1,-2))/(data_mask.sum()+1e-10))
+        return result
+    else:
+        result = torch.sqrt(torch.mean(weight * (pred - target)**2., dim=(-1,-2)))
+        return result
 
-    print('degradation_type: ', degradation_type)    
-    val_model_CNN_Head_ExtraSaveOutput(model.cuda(), data_loader_val, degradation_type, args.output_dir, mode='val_test', patch_size=16)
-    metric_msg = compute_metrics(os.path.join(args.output_dir, 'vis', 'val_test', degradation_type), dataset_path_HQ)
-    with open(os.path.join(args.output_dir, degradation_type+'_result.txt'), 'a') as f:
-        f.write('prompt id: {}'.format(args.prompt_id)+'  '+metric_msg+'\n')
+def compute_val(path='vil'):
 
-      
-def calculate_psnr(img1, img2):
-    # img1 and img2 have range [0, 255]
-    img1 = img1.astype(np.float64)
-    img2 = img2.astype(np.float64)
-    mse = np.mean((img1 - img2)**2)
-    if mse == 0:
-        return float('inf')
-    return 20 * math.log10(255.0 / math.sqrt(mse))
+    folder_path = Path('/mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/experiments/ood_test/vil_inter_15min/val_test/Epoch1')
+    predict_files = []
+    target_files = []
+    for file in folder_path.glob('predict*'):
+        predict_files.append(str(file))
+    for file in folder_path.glob('target*'):
+        target_files.append(str(file))
+    predict_files.sort()
+    target_files.sort()
+    print(len(predict_files))
+    assert len(predict_files)==len(target_files)
+    #! 每隔一个epoch跑一个 validation 步骤
+    rmse = 0.0
+    idx = 0
+    if path == 'vil':
+        thresholds = [16, 74, 133, 160, 181, 219]
+    elif path == 'ir':
+        thresholds = [-6000,-4000,0,2000]
+    elif path == 'ir069':
+        thresholds = [-4000, -5000, -6000, -7000]
+    elif path == 'vis':
+        thresholds = [2000,3200,4400,5600,6800]
+    elif path == 'no2':
+        thresholds = [1,5,10,15]
+    elif path == 'rainnet':
+        thresholds = [5,10,15,20]
+    elif path == 'sat':
+        thresholds = [140,160,180,200]
 
-def reorder_image(img, input_order='HWC'):
-    """Reorder images to 'HWC' order.
-    If the input_order is (h, w), return (h, w, 1);
-    If the input_order is (c, h, w), return (h, w, c);
-    If the input_order is (h, w, c), return as it is.
-    Args:
-        img (ndarray): Input image.
-        input_order (str): Whether the input order is 'HWC' or 'CHW'.
-            If the input image shape is (h, w), input_order will not have
-            effects. Default: 'HWC'.
-    Returns:
-        ndarray: reordered image.
-    """
-
-    if input_order not in ['HWC', 'CHW']:
-        raise ValueError(
-            f'Wrong input_order {input_order}. Supported input_orders are '
-            "'HWC' and 'CHW'")
-    if len(img.shape) == 2:
-        img = img[..., None]
-    if input_order == 'CHW':
-        img = img.transpose(1, 2, 0)
-    return img
-
-def _ssim(img1, img2):
-    """Calculate SSIM (structural similarity) for one channel images.
-    It is called by func:`calculate_ssim`.
-    Args:
-        img1 (ndarray): Images with range [0, 255] with order 'HWC'.
-        img2 (ndarray): Images with range [0, 255] with order 'HWC'.
-    Returns:
-        float: ssim result.
-    """
-
-    C1 = (0.01 * 255)**2
-    C2 = (0.03 * 255)**2
-
-    img1 = img1.astype(np.float64)
-    img2 = img2.astype(np.float64)
-    kernel = cv2.getGaussianKernel(11, 1.5)
-    window = np.outer(kernel, kernel.transpose())
-
-    mu1 = cv2.filter2D(img1, -1, window)[5:-5, 5:-5]
-    mu2 = cv2.filter2D(img2, -1, window)[5:-5, 5:-5]
-    mu1_sq = mu1**2
-    mu2_sq = mu2**2
-    mu1_mu2 = mu1 * mu2
-    sigma1_sq = cv2.filter2D(img1**2, -1, window)[5:-5, 5:-5] - mu1_sq
-    sigma2_sq = cv2.filter2D(img2**2, -1, window)[5:-5, 5:-5] - mu2_sq
-    sigma12 = cv2.filter2D(img1 * img2, -1, window)[5:-5, 5:-5] - mu1_mu2
-
-    ssim_map = ((2 * mu1_mu2 + C1) *
-                (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) *
-                                       (sigma1_sq + sigma2_sq + C2))
-    return ssim_map.mean()
-
-
-def calculate_ssim(img1,
-                   img2,
-                   crop_border=0,
-                   input_order='HWC',
-                   test_y_channel=False):
-    """Calculate SSIM (structural similarity).
-    Ref:
-    Image quality assessment: From error visibility to structural similarity
-    The results are the same as that of the official released MATLAB code in
-    https://ece.uwaterloo.ca/~z70wang/research/ssim/.
-    For three-channel images, SSIM is calculated for each channel and then
-    averaged.
-    Args:
-        img1 (ndarray): Images with range [0, 255].
-        img2 (ndarray): Images with range [0, 255].
-        crop_border (int): Cropped pixels in each edge of an image. These
-            pixels are not involved in the SSIM calculation.
-        input_order (str): Whether the input order is 'HWC' or 'CHW'.
-            Default: 'HWC'.
-        test_y_channel (bool): Test on Y channel of YCbCr. Default: False.
-    Returns:
-        float: ssim result.
-    """
-
-    assert img1.shape == img2.shape, (
-        f'Image shapes are differnet: {img1.shape}, {img2.shape}.')
-    if input_order not in ['HWC', 'CHW']:
-        raise ValueError(
-            f'Wrong input_order {input_order}. Supported input_orders are '
-            '"HWC" and "CHW"')
-    img1 = reorder_image(img1, input_order=input_order)
-    img2 = reorder_image(img2, input_order=input_order)
-    img1 = img1.astype(np.float64)
-    img2 = img2.astype(np.float64)
-
-    if crop_border != 0:
-        img1 = img1[crop_border:-crop_border, crop_border:-crop_border, ...]
-        img2 = img2[crop_border:-crop_border, crop_border:-crop_border, ...]
-
-
-    ssims = []
-    for i in range(img1.shape[2]):
-        ssims.append(_ssim(img1[..., i], img2[..., i]))
-    return np.array(ssims).mean()
-
-def compute_metrics(input_path, GT_path):
-    input_fname_list = os.listdir(input_path)
-    input_fname_list.sort()
-    input_path_list = [os.path.join(input_path, fname) for fname in input_fname_list]
-
-    GT_fname_list = os.listdir(GT_path)
-    GT_fname_list.sort()
-    GT_path_list = [os.path.join(GT_path, fname) for fname in GT_fname_list]
-
-    #assert len(input_path_list) == len(GT_path_list)
-    print(len(input_path_list))
-
-    crop_border = 0
-
-    psnr_list = []
-    ssim_list = []
-    mae_list = []
-    mse_list = []
-    for i in range(len(input_path_list)):
-        #assert input_fname_list[i].split('.')[0] == GT_fname_list[i].split('.')[0]
-        img1 = cv2.imread(input_path_list[i], cv2.IMREAD_COLOR)
-        
-        if 'SOTS' in GT_path:
-            HQ_name = input_path_list[i].split('/')[-1].split('_')[0]
-            HQ_path = os.path.join(GT_path, '{}.png'.format(HQ_name))
-            img2 = cv2.imread(HQ_path, cv2.IMREAD_COLOR)
+    total_pod = {thr: 0.0 for thr in thresholds}
+    total_far = {thr: 0.0 for thr in thresholds}
+    total_csi = {thr: 0.0 for thr in thresholds}
+    cal_num = 0
+    for idx in range(len(predict_files)):
+        val_pred = (torch.from_numpy(np.load(predict_files[idx])))
+        val_label = (torch.from_numpy(np.load(target_files[idx])))
+        # if val_label.mean() <= 100:
+        #     continue
+        # else:
+        cal_num = cal_num+1
+        if path=='ir':
+            pred = (val_pred-zscore_normalizations_sevir['ir107']['shift'])/zscore_normalizations_sevir['ir107']['scale']
+            target = (val_label-zscore_normalizations_sevir['ir107']['shift'])/zscore_normalizations_sevir['ir107']['scale']
+        elif path=='vil':
+            pred = (val_pred-zscore_normalizations_sevir['vil']['shift'])/zscore_normalizations_sevir['vil']['scale']
+            target = (val_label-zscore_normalizations_sevir['vil']['shift'])/zscore_normalizations_sevir['vil']['scale']
+        elif path=='ir069':
+            pred = (val_pred-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
+            target = (val_label-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
+        elif path == 'vis':
+            pred = (val_pred-zscore_normalizations_sevir['vis']['shift'])/zscore_normalizations_sevir['vis']['scale']
+            target = (val_label-zscore_normalizations_sevir['vis']['shift'])/zscore_normalizations_sevir['vis']['scale']
+        elif path == 'rainnet':
+            pred = val_pred/140
+            target = val_label/140
+        elif path == 'sat':
+            pred = (val_pred-max_min_satellite['pct37']['min'])/(max_min_satellite['pct37']['max']-max_min_satellite['pct37']['min'])
+            target = (val_label-max_min_satellite['pct37']['min'])/(max_min_satellite['pct37']['max']-max_min_satellite['pct37']['min'])
         else:
-            img2 = cv2.imread(GT_path_list[i], cv2.IMREAD_COLOR)
+            pred = val_pred
+            target = val_label     
+        mse = torch.mean((pred - target) ** 2)
+        rmse += torch.sqrt(mse)
         
+        
+        #todo 加上绘制 renorm label 和 pred 的代码
+        
+        
+        for thr in thresholds:
+            has_event_target = (val_label >= thr)
+            has_event_predict = (val_pred >= thr)
             
-        if crop_border == 0:
-            img1 = img1
-            img2 = img2
-        else:
-            img1 = img1[crop_border:-crop_border, crop_border:-crop_border, :]
-            img2 = img2[crop_border:-crop_border, crop_border:-crop_border, :]
+            hit = int(torch.sum(has_event_target & has_event_predict))
+            miss = int(torch.sum(has_event_target & ~has_event_predict))
+            false_alarm = int(torch.sum(~has_event_target & has_event_predict))
+            no_event = int(torch.sum(~has_event_target))
         
-        img1_rgb = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
-        img2_rgb = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
-        
-        psnr = calculate_psnr(img1_rgb, img2_rgb)
-        ssim = calculate_ssim(img1_rgb, img2_rgb)
-        
-        mae = np.mean(np.abs(img1_rgb.astype(np.float64) - img2_rgb.astype(np.float64)))
-        mse = np.mean((img1_rgb.astype(np.float64) - img2_rgb.astype(np.float64))**2)
-        
-        #print('img: {}  PSNR: {:.4f}  SSIM: {:.4f}'.format(input_fname_list[i].split('.')[0], psnr, ssim))
-        
-        psnr_list.append(psnr)
-        ssim_list.append(ssim)
-        mae_list.append(mae)
-        mse_list.append(mse)
+            pod = hit / (hit + miss) if (hit + miss) > 0 else float(0)
+            if pod >1:
+                print(hit)
+                print(hit + miss)
+            far = false_alarm / no_event if no_event > 0 else float(0)
+            if far > 1:
+                print(false_alarm)
+                print(no_event)
+            csi = hit / (hit + miss + false_alarm) if (hit + miss + false_alarm) > 0 else float(0)
+            
+            total_pod[thr] += pod
+            total_far[thr] += far
+            total_csi[thr] += csi
+    avg_rmse = rmse / (cal_num+1)
+    avg_far_all = 0
+    avg_pod_all = 0
+    print('avg_rmse: ', avg_rmse)
+    for thr in thresholds:
+        avg_pod = total_pod[thr] / (cal_num)
+        avg_far = total_far[thr] / (cal_num)
+        avg_csi = total_csi[thr] / (cal_num)
+        avg_far_all = avg_far+avg_far_all
+        avg_pod_all = avg_pod+avg_pod_all
+        print('thresholds: ', thr)
+        print("avg_pod: ", avg_pod)
+        print('avg_far: ', avg_far)
+        print('avg_csi: ', avg_csi)
+    # avg_far_all = avg_far_all/len(thresholds)
+    # avg_pod_all = avg_pod_all/len(thresholds)
+    # print('avg_far: ', avg_far_all)
+    # print('avg_pod: ', avg_pod_all)
 
-        
-    print('Prompt ID: ', args.prompt_id)
-    msg = 'Average PSNR: {:.4f}  SSIM: {:.4f}  MAE: {:.4f}  MSE: {:.4f}  Total image: {}'.format(np.mean(psnr_list), np.mean(ssim_list), np.mean(mae_list), np.mean(mse_list), len(psnr_list))
-    print(msg)
+def compute_val_era5(out_var=4):
+    if out_var == 3:
+        folder_path = Path('/mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/experiments/era5_t2m_2018/era5_3_12/val_test/Epoch1')
+    else:
+        folder_path = Path('/mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/experiments/era5_u10_2018/era5_8_4/val_test/Epoch1')
+    predict_files = []
+    target_files = []
+    for file in folder_path.glob('predict*'):
+        predict_files.append(str(file))
+    for file in folder_path.glob('target*'):
+        target_files.append(str(file))
+    predict_files.sort()
+    target_files.sort()
+    print(len(predict_files))
+    assert len(predict_files)==len(target_files)
+    rmse_score_sum = 0
+    acc_score_sum = 0
     
-    
-    return msg
+    if out_var==3:
+        clim = 0
+        for i in range(len(predict_files)):
+            val_label = (torch.from_numpy(np.load(target_files[i]))[64:192,:])* 21.32010786700973 + 278.7854495405721
+            clim += val_label/len(predict_files)
+        for idx in range(len(predict_files)):
+            val_pred = (torch.from_numpy(np.load(predict_files[idx]))[64:192,:])* 21.32010786700973 + 278.7854495405721
+            val_label = (torch.from_numpy(np.load(target_files[idx]))[64:192,:])* 21.32010786700973 + 278.7854495405721
+            score = weighted_rmse_torch(val_pred, val_label)
+            val_pred = val_pred-clim
+            val_label = val_label-clim
+            pred_prime = val_pred - torch.mean(val_pred)
+            y_prime = val_label - torch.mean(val_label)
+            score_acc = weighted_acc_torch(pred_prime, y_prime)
+            rmse_score_sum += score
+            acc_score_sum += score_acc
+        # for idx in range(0, len(predict_files), 4):
+        #     val_pred = (torch.from_numpy(np.load(predict_files[idx]))[64:192,:])* 21.32010786700973 + 278.7854495405721
+        #     val_label = (torch.from_numpy(np.load(target_files[idx]))[64:192,:])* 21.32010786700973 + 278.7854495405721
+        #     score = weighted_rmse_torch(val_pred, val_label)
+        #     clim = torch.mean(val_label)
+        #     score_acc = weighted_acc_torch(val_pred-clim, val_label-clim)
+        #     rmse_score_sum += score
+        #     acc_score_sum += score_acc
+    elif out_var==8:
+        clim = 0
+        for i in range(len(predict_files)):
+            val_label = (torch.from_numpy(np.load(target_files[i]))[64:192,:])* 3299.702929930327 + 53826.54542968748
+            clim += val_label/len(predict_files)
+        for idx in range(len(predict_files)):
+            val_pred = (torch.from_numpy(np.load(predict_files[idx]))[64:192,:])*3299.702929930327 + 53826.54542968748
+            val_label = (torch.from_numpy(np.load(target_files[idx]))[64:192,:])*3299.702929930327 + 53826.54542968748
+            score = weighted_rmse_torch(val_pred, val_label)
+            val_pred = val_pred-clim
+            val_label = val_label-clim
+            pred_prime = val_pred - torch.mean(val_pred)
+            y_prime = val_label - torch.mean(val_label)
+            score_acc = weighted_acc_torch(pred_prime, y_prime)
+            rmse_score_sum += score
+            acc_score_sum += score_acc
+    else:
+        clim=0
+        for i in range(len(predict_files)):
+            val_label = (torch.from_numpy(np.load(target_files[i]))[64:192,:])* 5.610453475051704 -0.14186215714480854
+            clim += val_label/len(predict_files)
 
-if __name__ == '__main__':
-    args = get_args()
-    args = args.parse_args()
-    seed = args.seed
-    torch.manual_seed(seed)
-    if args.output_dir:
-        Path(args.output_dir).mkdir(parents=True, exist_ok=True)
-    main(args)
+        for idx in range(len(predict_files)):
+
+            val_pred = (torch.from_numpy(np.load(predict_files[idx]))[64:192,:])* 5.610453475051704 -0.14186215714480854
+            
+            val_label = (torch.from_numpy(np.load(target_files[idx]))[64:192,:])* 5.610453475051704 -0.14186215714480854
+
+            score = weighted_rmse_torch(val_pred.unsqueeze(0), val_label.unsqueeze(0))
+            val_pred = val_pred-clim
+            val_label = val_label-clim
+            pred_prime = val_pred - torch.mean(val_pred)
+            y_prime = val_label - torch.mean(val_label)
+            score_acc = weighted_acc_torch(pred_prime, y_prime)
+            rmse_score_sum += score
+            acc_score_sum += score_acc
+    print('rmse:', rmse_score_sum)
+    print('acc:', acc_score_sum)
+    print('rmse:', rmse_score_sum/len(target_files))
+    print('acc:', acc_score_sum/len(target_files))
+
+    return rmse_score_sum/len(target_files)
+        
+compute_val_era5()

@@ -18,8 +18,11 @@ import einops
 from dataset.data_utiles import *
 import dataset.util as util
 import pandas as pd
+import json
+from datetime import datetime
 
 from petrel_client.client import Client
+from skimage.metrics import structural_similarity as ssim
 
 client = Client(conf_path="~/petreloss.conf")
 
@@ -364,14 +367,23 @@ class DatasetLowlevel_Train(Dataset):
             return batch, deg_type
 
 
+def get_prompt_base(path):
+    all_files = os.listdir(path)
+    return all_files
+
+def rmse(y_true, y_pred):
+    return np.sqrt(((y_true - y_pred) ** 2).mean())
+
 class DatasetSevir_Train(Dataset):
-    def __init__(self, data_path, input_size, phase, task='sevir'):
+    def __init__(self, data_path, input_size, phase, task='sevir', not_finetune=True, RAG='random', prompt_item=0):
         
         np.random.seed(5)
         self.HQ_size = input_size
         self.phase = phase
         self.task = task
         self.data_choice = data_path
+        self.RAG = RAG
+        self.prompt_item = prompt_item
         # base dataset
         # self.paths_HQ, self.sizes_HQ = util.get_image_paths('img', dataset_path)
         # self.paths_base_len = len(self.paths_HQ)
@@ -380,81 +392,175 @@ class DatasetSevir_Train(Dataset):
         img_types = set(['vis','ir069','ir107','vil'])
         events = self.catalog.groupby('id').filter(lambda x: img_types.issubset(set(x['img_type']))).groupby('id')
         self.event_ids = list(events.groups.keys())
+        self.not_finetune = not_finetune
 
         self.dataset_list = ['sevir', 'trans', 'inter']
-
+        self.prompt_ids = self.event_ids[:11458]
         if self.phase == 'train':
             # self.event_ids = self.event_ids[:11408]
             self.event_ids = self.event_ids[:11458]
         else:
             self.event_ids = self.event_ids[11488:]
+        if self.RAG == 'low':
+            self.path = '/mnt/petrelfs/zhaoxiangyu1/data/sevir_prompt_low'
+        else:
+            self.path = '/mnt/petrelfs/zhaoxiangyu1/data/sevir_prompt_50'
+        self.prompt_base = get_prompt_base(self.path+'/vil')
+        self.prompt_base.sort()
+
+        self.vis_prompt = json.load(open('/mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/dataset/result.json'))
     
     def get_line_time(self, value):
         row = self.catalog.loc[self.catalog['id'] == value].iloc[0]
         time = row['file_name'].split('/')[1]
         return time
     
-    def is_day_time(self, value):
+    def get_day_time(self, value):
         row = self.catalog.loc[self.catalog['id'] == value].iloc[0]
-        time = row['time_utc'].split(' ')[1]
-        return time
+        time = row['time_utc']
+        date_time_obj = datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
+        # 提取月份
+        month = date_time_obj.month
+        # 提取小时
+        hour = date_time_obj.hour
+        return f"{month}_{hour}"
+
+    def get_random_same_time(self, time):
+        data_list = self.vis_prompt[time]
+        random_time = random.choice(data_list)
+        return random_time
 
     def __len__(self):
-        if self.task == 'sevir':
-            if self.phase == 'train':
+        if self.not_finetune:
+            if self.task == 'sevir':
+                if self.phase == 'train':
+                    # return len(self.event_ids)*49
+                    return len(self.event_ids)*24
+                else:
+                    return len(self.event_ids)*48
+            elif self.task == 'trans':
                 # return len(self.event_ids)*49
-                return len(self.event_ids)*24
-            else:
-                return len(self.event_ids)*4
-        elif self.task == 'trans':
-            # return len(self.event_ids)*49
-            if self.phase == 'train':
-                return len(self.event_ids)*24
-            else:
-                return len(self.event_ids)*4
-        elif self.task == 'inter':
-            if self.phase == 'train':
-                return len(self.event_ids)*36
-            else:
-                return len(self.event_ids)*4
-        elif self.task == 'predict':
-            if self.phase == 'train':
-                return len(self.event_ids)*24
-            else:
-                return len(self.event_ids)*4
-        elif self.task == 'ir_predict':
-            if self.phase == 'train':
-                return len(self.event_ids)*24
-            else:
-                return len(self.event_ids)*4
-        elif self.task == '2c_tasks':
-            if self.phase == 'train':
-                return len(self.event_ids)*24
-            else:
-                return len(self.event_ids)*4
-        elif self.task == 'down_scaling':
-            if self.phase == 'train':
-                return len(self.event_ids)*24
-            else:
-                return len(self.event_ids)*4
-        elif self.task == 'vis_recon':
-            if self.phase == 'train':
-                return len(self.event_ids)*24
-            else:
-                return len(self.event_ids)*4
-    
-    def get_sevir_in_out(self, ids):
-        # evrty event has 49 frame
-
-        if self.phase == 'train':
-            event_id = ids // 24
-            frame_id = (ids % 24)*2
+                if self.phase == 'train':
+                    return len(self.event_ids)*24
+                else:
+                    return len(self.event_ids)*48
+            elif self.task == 'inter':
+                if self.phase == 'train':
+                    return len(self.event_ids)*36
+                else:
+                    return len(self.event_ids)*36
+            elif self.task == 'predict':
+                if self.phase == 'train':
+                    return len(self.event_ids)*12
+                else:
+                    return len(self.event_ids)*12
+            elif self.task == 'ir_predict':
+                if self.phase == 'train':
+                    return len(self.event_ids)*12
+                else:
+                    return len(self.event_ids)*12
+            elif self.task == '2c_tasks':
+                if self.phase == 'train':
+                    return len(self.event_ids)*24
+                else:
+                    return len(self.event_ids)*48
+            elif self.task == 'down_scaling':
+                if self.phase == 'train':
+                    return len(self.event_ids)*24
+                else:
+                    return len(self.event_ids)*48
+            elif self.task == 'vis_recon':
+                if self.phase == 'train':
+                    return len(self.event_ids)*24
+                else:
+                    return len(self.event_ids)*48
+            elif self.task in ['ir107_predict', 'vis_predict']:
+                if self.phase == 'train':
+                    return len(self.event_ids)*12
+                else:
+                    return len(self.event_ids)*12
+            elif self.task in ['down_scaling_ir107', 'ir107_trans_ir069', 'sevir_vis', 'multi_downscaling', 'down_scaling_vil_8x']:
+                if self.phase == 'train':
+                    return len(self.event_ids)*24
+                else:
+                    return len(self.event_ids)*48
+            elif self.task in ['vil_inter_15min', 'vil_inter_60min', 'ir069_inter_60min']:
+                if self.phase == 'train':
+                    return len(self.event_ids)*24
+                else:
+                    return len(self.event_ids)*24 
         else:
-            event_id = ids // 4
-            frame_id = (ids % 4)*10
+            if self.task == 'sevir':
+                if self.phase == 'train':
+                    # return len(self.event_ids)*49
+                    return len(self.event_ids)*4
+                else:
+                    return len(self.event_ids)*48
+            elif self.task == 'trans':
+                # return len(self.event_ids)*49
+                if self.phase == 'train':
+                    return len(self.event_ids)
+                else:
+                    return len(self.event_ids)*48
+            elif self.task == 'inter':
+                if self.phase == 'train':
+                    return len(self.event_ids)
+                else:
+                    return len(self.event_ids)*36
+            elif self.task == 'predict':
+                if self.phase == 'train':
+                    return len(self.event_ids)*4
+                else:
+                    return len(self.event_ids)*12
+            elif self.task == 'ir_predict':
+                if self.phase == 'train':
+                    return len(self.event_ids)*4
+                else:
+                    return len(self.event_ids)*12
+            elif self.task == '2c_tasks':
+                if self.phase == 'train':
+                    return len(self.event_ids)
+                else:
+                    return len(self.event_ids)*48
+            elif self.task == 'down_scaling':
+                if self.phase == 'train':
+                    return len(self.event_ids)*4
+                else:
+                    return len(self.event_ids)*48
+            elif self.task == 'vis_recon':
+                if self.phase == 'train':
+                    return len(self.event_ids)*4
+                else:
+                    return len(self.event_ids)*48
+            elif self.task == 'ir107_trans_ir069':
+                if self.phase == 'train':
+                    return len(self.event_ids)*24
+                else:
+                    return len(self.event_ids)*48
+    
+    def get_sevir_in_out(self, ids, prompt=False):
+        # evrty event has 49 frame
+        if self.not_finetune:
+            if self.phase == 'train':
+                event_id = ids // 24
+                frame_id = (ids % 24)*2
+            else:
+                event_id = ids // 48
+                frame_id = ids % 48
+        else:
+            if self.phase == 'train':
+                event_id = ids // 4
+                frame_id = ids % 4 + random.randint(0,44)
+            else:
+                event_id = ids // 48
+                frame_id = ids % 48
 
-        event = self.event_ids[event_id]
-        event_time = self.get_line_time(event)
+        if prompt:
+            event = self.prompt_ids[event_id]
+            event_time = self.get_line_time(event)
+        else:
+            event = self.event_ids[event_id]
+            event_time = self.get_line_time(event)
 
         in_variables = ['ir069', 'ir107']
         # out_variables = ['vis']
@@ -491,35 +597,142 @@ class DatasetSevir_Train(Dataset):
         # sat_out = np.transpose(sat_out, (1, 2, 0))
         sat_out = out_data[0]
         return sat_in, sat_out
-    
-    def get_random_day_vis(self, ids):
-        if self.phase == 'train':
-            event_id = ids // 24
-            frame_id = (ids % 24)*2
+
+    def get_sevir_vis(self, ids, prompt=False):
+        # evrty event has 49 frame
+        if self.not_finetune:
+            if self.phase == 'train':
+                event_id = ids // 24
+                frame_id = (ids % 24)*2
+            else:
+                event_id = ids // 48
+                frame_id = ids % 48
         else:
-            event_id = ids // 4
-            frame_id = (ids % 4)*10
-        event = self.event_ids[event_id]
+            if self.phase == 'train':
+                event_id = ids // 4
+                frame_id = ids % 4 + random.randint(0,44)
+            else:
+                event_id = ids // 48
+                frame_id = ids % 48
+
+        if prompt:
+            event = self.prompt_ids[event_id]
+            event_time = self.get_line_time(event)
+        else:
+            event = self.event_ids[event_id]
+            event_time = self.get_line_time(event)
+
+        in_variables = ['ir069', 'ir107', 'vis']
+        # out_variables = ['vis']
+        out_variables = ['vil']
+        event_data = []
+        out_data = []
+
+        for variable in in_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, frame_id]
+            # normalization
+            if variable == 'ir069':
+                data = (data-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
+            elif variable == 'ir107':
+                data = (data-zscore_normalizations_sevir['ir107']['shift'])/zscore_normalizations_sevir['ir107']['scale']
+            elif variable == 'vis':
+                data = (data-zscore_normalizations_sevir['vis']['shift'])/zscore_normalizations_sevir['vis']['scale']
+                event_data.append(data)
+            event_data.append(data)
+        sat_in = np.stack(event_data, axis=2)
+
+        for variable in out_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, frame_id]
+            # normalization
+            if variable == 'vil':
+                data = (data-zscore_normalizations_sevir['vil']['shift'])/zscore_normalizations_sevir['vil']['scale']
+                data = np.expand_dims(data, axis=-1)
+            else:
+                print('only can use vil as target!')
+            out_data.append(data)
+        # sat_out = np.repeat(out_data, 2, axis=0)
+        # sat_out = np.transpose(sat_out, (1, 2, 0))
+        sat_out = out_data[0]
+        return sat_in, sat_out
+        
+    def get_random_day_vis(self, ids, prompt=False):
+
+        if self.not_finetune:
+            if self.phase == 'train':
+                event_id = ids // 24
+                frame_id = (ids % 24)*2
+            else:
+                event_id = ids // 48
+                frame_id = ids % 48
+        else:
+            if self.phase == 'train':
+                event_id = ids // 4
+                frame_id = ids % 4 + random.randint(0,44)
+            else:
+                event_id = ids // 48
+                frame_id = ids % 48
+        if event_id > len(self.event_ids)-1:
+            event_id = random.randint(0, len(self.event_ids)-1)
+
+        if prompt:
+            event = self.prompt_ids[event_id]
+            event_time = self.get_line_time(event)
+        else:
+            event = self.event_ids[event_id]
+            event_time = self.get_line_time(event)
+
+        path = f"s3://sevir_pair/vis/{event_time}/{event}.npy"
+        data = io.BytesIO(client.get(path))
+        data = np.load(data)
+        data = data[:, :, frame_id]
+        if data.mean() > 100 or self.phase != 'train':
+            return event_id, frame_id
+        else:
+            if self.phase == 'train':
+                if self.not_finetune:
+                    random_ids = random.randint(0, len(self.event_ids)*24-1)
+                else:
+                    random_ids = random.randint(0, len(self.event_ids)-1)
+            else:
+                random_ids = random.randint(0, len(self.event_ids)*48-1)
+            return self.get_random_day_vis(random_ids)
+        
+    def is_daytime_event(self, event, frame_id):
         event_time = self.get_line_time(event)
         path = f"s3://sevir_pair/vis/{event_time}/{event}.npy"
         data = io.BytesIO(client.get(path))
         data = np.load(data)
         data = data[:, :, frame_id]
-        if data.mean() > 100:
-            return event_id, frame_id
+        if data.mean() > 50:
+            return False
         else:
-            if self.phase == 'train':
-                random_ids = random.randint(0, len(self.event_ids)*24-1)
-            else:
-                random_ids = random.randint(0, len(self.event_ids)*4-1)
-            return self.get_random_day_vis(random_ids)
+            return True
 
-    def get_vis_reconstruction(self, ids):
+    def get_vis_reconstruction(self, ids, prompt=False, event_old=None, has_frame_id=None):
         # evrty event has 49 frame
 
-        event_id, frame_id = self.get_random_day_vis(ids)
+        # event_id, frame_id = self.get_random_day_vis(ids, prompt)
 
-        event = self.event_ids[event_id]
+        if has_frame_id is not None:
+            frame_id = has_frame_id
+            date_time = self.get_day_time(event_old)
+            event = self.get_random_same_time(date_time)
+            time2break = 0
+            while self.is_daytime_event(event, frame_id):
+                event = self.get_random_same_time(date_time)
+                time2break = time2break+1
+                if time2break == 5:
+                    break
+        else:
+            event_id, frame_id = self.get_random_day_vis(ids, prompt)
+            event = self.event_ids[event_id]
+
         event_time = self.get_line_time(event)
 
         in_variables = ['ir069', 'ir107']
@@ -552,24 +765,35 @@ class DatasetSevir_Train(Dataset):
             event_data.append(data)
         sat_in = np.stack(event_data, axis=2)
 
-        return sat_in, sat_out
+        return sat_in, sat_out, event, frame_id
     
-    def get_ir_trans(self, ids):
+    def get_ir_trans(self, ids, in_variables=['ir069'], out_variables=['ir107'], prompt=False):
         # evrty event has 49 frame
-        if self.phase == 'train':
-            event_id = ids // 24
-            frame_id = (ids % 24)*2
-
+        if self.not_finetune:
+            if self.phase == 'train':
+                event_id = ids // 24
+                frame_id = (ids % 24)*2
+            else:
+                event_id = ids // 48
+                frame_id = ids % 48
         else:
-            event_id = ids // 4
-            frame_id = (ids % 4)*10
+            if self.phase == 'train':
+                event_id = ids
+                frame_id = random.randint(0,48)
+            else:
+                event_id = ids // 48
+                frame_id = ids % 48
 
-        event = self.event_ids[event_id]
-        event_time = self.get_line_time(event)
+        if prompt:
+            event = self.prompt_ids[event_id]
+            event_time = self.get_line_time(event)
+        else:
+            event = self.event_ids[event_id]
+            event_time = self.get_line_time(event)
 
-        in_variables = ['ir069']
+        in_variables = in_variables
         # out_variables = ['vis']
-        out_variables = ['ir107']
+        out_variables = out_variables
         event_data = []
         out_data = []
 
@@ -606,21 +830,33 @@ class DatasetSevir_Train(Dataset):
         sat_out = out_data[0]
         return sat_in, sat_out
     
-    def get_sevir_predict(self, ids):
+    def get_sevir_predict(self, ids, prompt=False):
         # evrty event has 49 frame
-        if self.phase == 'train':
-            event_id = ids // 24
-            frame_id = ids % 24
-
+        if self.not_finetune:
+            if self.phase == 'train':
+                event_id = ids // 12
+                frame_id = ids % 12
+            else:
+                event_id = ids // 12
+                frame_id = ids % 12
         else:
-            event_id = ids // 4
-            frame_id = (ids % 4)*5
+            if self.phase == 'train':
+                event_id = ids // 4
+                frame_id = ids % 4 + random.randint(0,8)
+            else:
+                event_id = ids // 12
+                frame_id = ids % 12
             
-        event = self.event_ids[event_id]
-        event_time = self.get_line_time(event)
+
+        if prompt:
+            event = self.prompt_ids[event_id]
+            event_time = self.get_line_time(event)
+        else:
+            event = self.event_ids[event_id]
+            event_time = self.get_line_time(event)
 
         in_variables = ['vil']
-        data_list = [frame_id, frame_id+6, frame_id+12, frame_id+18, frame_id+24]
+        data_list = [frame_id, frame_id+6, frame_id+12, frame_id+18, frame_id+24, frame_id+36]
 
         for variable in in_variables:
             path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
@@ -631,26 +867,37 @@ class DatasetSevir_Train(Dataset):
             if variable == 'vil':
                 data = (data-zscore_normalizations_sevir['vil']['shift'])/zscore_normalizations_sevir['vil']['scale']
                 # data = np.expand_dims(data, axis=-1)
-        vil_in = data[:,:,:-1]
-        vil_out = data[:,:,-1]
-        vil_out = np.expand_dims(vil_out, axis=-1)
+        vil_in = data[:,:,:-2]
+        vil_out = data[:,:,-2:]
+        # vil_out = np.expand_dims(vil_out, axis=-1)
         return vil_in, vil_out
     
-    def get_ir_predict(self, ids, variable_type=None):
+    def get_ir_predict(self, ids, variable_type=['ir069'], prompt=False):
         # evrty event has 49 frame
-        if self.phase == 'train':
-            event_id = ids // 24
-            frame_id = ids % 24
-
+        if self.not_finetune:
+            if self.phase == 'train':
+                event_id = ids // 12
+                frame_id = ids % 12
+            else:
+                event_id = ids // 12
+                frame_id = ids % 12
         else:
-            event_id = ids // 4
-            frame_id = (ids % 4)*5
+            if self.phase == 'train':
+                event_id = ids // 4
+                frame_id = ids % 4 + random.randint(0,8)
+            else:
+                event_id = ids // 12
+                frame_id = ids % 12
             
-        event = self.event_ids[event_id]
-        event_time = self.get_line_time(event)
+        if prompt:
+            event = self.prompt_ids[event_id]
+            event_time = self.get_line_time(event)
+        else:
+            event = self.event_ids[event_id]
+            event_time = self.get_line_time(event)
 
-        in_variables = ['ir069']
-        data_list = [frame_id, frame_id+6, frame_id+12, frame_id+18, frame_id+24]
+        in_variables = variable_type
+        data_list = [frame_id, frame_id+6, frame_id+12, frame_id+18, frame_id+24, frame_id+36]
 
         for variable in in_variables:
             path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
@@ -660,26 +907,47 @@ class DatasetSevir_Train(Dataset):
             # normalization
             if variable == 'ir069':
                 data = (data-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
+            elif variable == 'ir107':
+                data = (data-zscore_normalizations_sevir['ir107']['shift'])/zscore_normalizations_sevir['ir107']['scale']
+            elif variable == 'vis':
+                data = (data-zscore_normalizations_sevir['vis']['shift'])/zscore_normalizations_sevir['vis']['scale']
                 # data = np.expand_dims(data, axis=-1)
-        ir_in = data[:,:,:-1]
-        ir_out = data[:,:,-1]
-        ir_out = np.expand_dims(ir_out, axis=-1)
+        ir_in = data[:,:,:-2]
+        ir_out = data[:,:,-2:]
+        # ir_out = np.expand_dims(ir_out, axis=-1)
         return ir_in, ir_out
     
-    def get_sevir_inter(self, ids):
+    def get_sevir_inter(self, ids, in_variables=['vil'], scale='30min', prompt=False):
         # evrty event has 49 frame
-        if self.phase == 'train':
-            event_id = ids // 36
-            frame_id = ids % 36
+        if self.not_finetune:
+            if self.phase == 'train':
+                event_id = ids // 36
+                frame_id = ids % 36
+            else:
+                event_id = ids // 36
+                frame_id = ids % 36
         else:
-            event_id = ids // 4
-            frame_id = (ids % 4)*10
+            if self.phase == 'train':
+                event_id = ids
+                frame_id = random.randint(0,36)
+            else:
+                event_id = ids // 36
+                frame_id = ids % 36
 
-        event = self.event_ids[event_id]
-        event_time = self.get_line_time(event)
+        if prompt:
+            event = self.prompt_ids[event_id]
+            event_time = self.get_line_time(event)
+        else:
+            event = self.event_ids[event_id]
+            event_time = self.get_line_time(event)
 
-        in_variables = ['vil']
-        data_list = [frame_id, frame_id+12, frame_id+6]
+        in_variables = in_variables
+        if scale == '30min':
+            data_list = [frame_id, frame_id+12, frame_id+6]
+        elif scale == '15min':
+            data_list = [frame_id, frame_id+6, frame_id+3]
+        elif scale == '60min':
+            data_list = [frame_id, frame_id+24, frame_id+12]
 
         for variable in in_variables:
             path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
@@ -690,22 +958,36 @@ class DatasetSevir_Train(Dataset):
             if variable == 'vil':
                 data = (data-zscore_normalizations_sevir['vil']['shift'])/zscore_normalizations_sevir['vil']['scale']
                 # data = np.expand_dims(data, axis=-1)
+            if variable == 'ir069':
+                data = (data-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
         vil_in = data[:,:,:-1]
         vil_out = data[:,:,-1]
         vil_out = np.expand_dims(vil_out, axis=-1)
         return vil_in, vil_out
     
-    def get_sevir_vil_down_scaling(self, ids, variable_type=['vil']):
+    def get_sevir_vil_down_scaling(self, ids, variable_type=['vil'], scale=False, prompt=False):
         # evrty event has 49 frame
-        if self.phase == 'train':
-            event_id = ids // 24
-            frame_id = (ids % 24)*2
+        if self.not_finetune:
+            if self.phase == 'train':
+                event_id = ids // 24
+                frame_id = (ids % 24)*2
+            else:
+                event_id = ids // 48
+                frame_id = ids % 48
         else:
-            event_id = ids // 4
-            frame_id = (ids % 4)*10
+            if self.phase == 'train':
+                event_id = ids // 4
+                frame_id = ids % 4 + random.randint(0,44)
+            else:
+                event_id = ids // 48
+                frame_id = ids % 48
 
-        event = self.event_ids[event_id]
-        event_time = self.get_line_time(event)
+        if prompt:
+            event = self.prompt_ids[event_id]
+            event_time = self.get_line_time(event)
+        else:
+            event = self.event_ids[event_id]
+            event_time = self.get_line_time(event)
 
         in_variables = variable_type
 
@@ -720,19 +1002,78 @@ class DatasetSevir_Train(Dataset):
                 # data = np.expand_dims(data, axis=-1)
             if variable == 'ir069':
                 data = (data-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
+
+            if variable == 'ir107':
+                data = (data-zscore_normalizations_sevir['ir107']['shift'])/zscore_normalizations_sevir['ir107']['scale']
         vil_in = data[:,:]
         vil_out = data[:,:]
         vil_in = np.expand_dims(vil_in, axis=-1)
         vil_in = np.dstack((vil_in, vil_in))
         vil_out = np.expand_dims(vil_out, axis=-1)
         if variable_type[0] == 'vil':
+            if scale:
+                vil_in = cv2.resize(np.copy(vil_in), (32, 32),
+                        interpolation=cv2.INTER_LINEAR)
             # down_scaling: vil_in 384->256->64
-            vil_in = cv2.resize(np.copy(vil_in), (64, 64),
-                        interpolation=cv2.INTER_LINEAR)
+            else:
+                vil_in = cv2.resize(np.copy(vil_in), (64, 64),
+                            interpolation=cv2.INTER_LINEAR)
         else:
-            vil_in = cv2.resize(np.copy(vil_in), (64, 64),
-                        interpolation=cv2.INTER_LINEAR)
+            if scale:
+                vil_in = cv2.resize(np.copy(vil_in), (32, 32),
+                interpolation=cv2.INTER_LINEAR)
+            else:
+                vil_in = cv2.resize(np.copy(vil_in), (64, 64),
+                            interpolation=cv2.INTER_LINEAR)
         return vil_in, vil_out
+
+    def multi_down_scaling(self, ids, variable_type=['ir069','ir107'], prompt=False):
+        # evrty event has 49 frame
+        if self.not_finetune:
+            if self.phase == 'train':
+                event_id = ids // 24
+                frame_id = (ids % 24)*2
+            else:
+                event_id = ids // 48
+                frame_id = ids % 48
+        else:
+            if self.phase == 'train':
+                event_id = ids // 4
+                frame_id = ids % 4 + random.randint(0,44)
+            else:
+                event_id = ids // 48
+                frame_id = ids % 48
+
+        if prompt:
+            event = self.prompt_ids[event_id]
+            event_time = self.get_line_time(event)
+        else:
+            event = self.event_ids[event_id]
+            event_time = self.get_line_time(event)
+
+        in_variables = variable_type
+        vil_in = []
+        val_out = []
+        for variable in in_variables:
+            path = f"s3://sevir_pair/{variable}/{event_time}/{event}.npy"
+            data = io.BytesIO(client.get(path))
+            data = np.load(data)
+            data = data[:, :, frame_id]
+            # normalization
+            if variable == 'ir069':
+                data = (data-zscore_normalizations_sevir['ir069']['shift'])/zscore_normalizations_sevir['ir069']['scale']
+
+            elif variable == 'ir107':
+                data = (data-zscore_normalizations_sevir['ir107']['shift'])/zscore_normalizations_sevir['ir107']['scale']
+            
+            vil_in.append(data)
+            val_out.append(data)
+        vil_in = np.stack(vil_in, axis=2)
+        val_out = np.stack(val_out, axis=2)
+
+        vil_in = cv2.resize(np.copy(vil_in), (64, 64),
+                    interpolation=cv2.INTER_LINEAR)
+        return vil_in, val_out
 
     def __getitem__(self, idx):
 
@@ -743,44 +1084,277 @@ class DatasetSevir_Train(Dataset):
             dataset_choice = self.data_choice
         deg_type = dataset_choice
         #todo event_ids并未对齐全部数据集
-        random_index = random.randint(0, len(self.event_ids)-1)
+        if self.not_finetune:
+            random_index = random.randint(0, len(self.prompt_ids)*12-1)
+        else:
+            random_index = random.randint(0, len(self.prompt_ids)-1)
+
+        # if self.RAG:
+        #     if dataset_choice not in ['predict', 'inter', 'ir_predict']:
+        #         random_index = (idx // 48) * 48 + random.randint(0, 47)
+        #     elif dataset_choice in ['predict', 'ir_predict']:
+        #         random_index = (idx // 12) * 12 + random.randint(0, 11)
+        #     elif dataset_choice == 'inter':
+        #         random_index = (idx // 36) * 36 + random.randint(0, 35)
+        # Task4. 卫星(红外IR069，IR107)-->降水VIL估计；
         if dataset_choice == 'sevir':
             sat_in, rad_out = self.get_sevir_in_out(idx)
-            context_sat_in, context_rad_out = self.get_sevir_in_out(random_index)
+            if self.RAG == 'random':
+                context_sat_in, context_rad_out = self.get_sevir_in_out(random_index, prompt=True)
+            elif self.RAG == 'high' or self.RAG == 'low':
+                # random_index = random.randint(0, 569)
+                random_index = self.prompt_item
+                event_id = self.prompt_base[random_index]
+                ir069_in = np.load(self.path+'/ir069/'+str(event_id))
+                ir107_in = np.load(self.path+'/ir107/'+str(event_id))
+                vil_out = np.load(self.path+'/vil/'+str(event_id))
+                context_sat_in = np.stack([ir069_in, ir107_in], axis=2)
+                context_rad_out = np.expand_dims(vil_out[:,:,-1], axis=-1)
+            elif self.RAG == 'rmse':
+                min_rmse = 100
+                for event in self.prompt_base:
+                    ir069_in = np.load(self.path+'/ir069/'+str(event))
+                    ir107_in = np.load(self.path+'/ir107/'+str(event))
+                    context_sat_in = np.stack([ir069_in, ir107_in], axis=2)
+                    rmse_score = rmse(sat_in, context_sat_in)
+                    if rmse_score<min_rmse:
+                       min_rmse = rmse_score
+                       event_id = event
+                ir069_in = np.load(self.path+'/ir069/'+str(event_id))
+                ir107_in = np.load(self.path+'/ir107/'+str(event_id))
+                vil_out = np.load(self.path+'/vil/'+str(event_id))
+                context_sat_in = np.stack([ir069_in, ir107_in], axis=2)
+                context_rad_out = np.expand_dims(vil_out[:,:,-1], axis=-1)
+            elif self.RAG == 'ssim':
+                max_score = -2
+                for event in self.prompt_base:
+                    ir069_in = np.load(self.path+'/ir069/'+str(event))
+                    ir107_in = np.load(self.path+'/ir107/'+str(event))
+                    context_sat_in = np.stack([ir069_in, ir107_in], axis=2)
+                    ssim_score = ssim(sat_in[:,:,0], context_sat_in[:,:,0], data_range=1)
+                    if ssim_score>max_score:
+                       max_score = ssim_score
+                       event_id = event
+                ir069_in = np.load(self.path+'/ir069/'+str(event_id))
+                ir107_in = np.load(self.path+'/ir107/'+str(event_id))
+                vil_out = np.load(self.path+'/vil/'+str(event_id))
+                context_sat_in = np.stack([ir069_in, ir107_in], axis=2)
+                context_rad_out = np.expand_dims(vil_out[:,:,-1], axis=-1)
+        # 卫星(红外IR069/107)-->卫星(红外IR107/069)
         elif dataset_choice == 'ir_trans':
             sat_in, rad_out = self.get_ir_trans(idx)
-            context_sat_in, context_rad_out = self.get_ir_trans(random_index)
+            if self.RAG == 'random':
+                context_sat_in, context_rad_out = self.get_ir_trans(random_index, prompt=True)
+            elif self.RAG == 'high' or self.RAG == 'low':
+                random_index = self.prompt_item
+                event_id = self.prompt_base[random_index]
+                ir069_in = np.load(self.path+'/ir069/'+str(event_id))
+                ir107_in = np.load(self.path+'/ir107/'+str(event_id))
+                context_sat_in = np.stack([ir069_in, ir069_in], axis=2)
+                context_rad_out = np.expand_dims(ir107_in, axis=-1)
+            elif self.RAG == 'rmse':
+                min_rmse = 100
+                for event in self.prompt_base:
+                    ir069_in = np.load(self.path+'/ir069/'+str(event))
+                    rmse_score = rmse(sat_in[:,:,0], ir069_in)
+                    if rmse_score<min_rmse:
+                       min_rmse = rmse_score
+                       event_id = event
+                ir069_in = np.load(self.path+'/ir069/'+str(event_id))
+                ir107_in = np.load(self.path+'/ir107/'+str(event_id))
+                context_sat_in = np.stack([ir069_in, ir069_in], axis=2)
+                context_rad_out = np.expand_dims(ir107_in, axis=-1)
+            elif self.RAG == 'ssim':
+                max_score = -2
+                for event in self.prompt_base:
+                    ir069_in = np.load(self.path+'/ir069/'+str(event))
+                    ssim_score = ssim(sat_in[:,:,0], ir069_in, data_range=1)
+                    if ssim_score>max_score:
+                       max_score = ssim_score
+                       event_id = event
+                ir069_in = np.load(self.path+'/ir069/'+str(event_id))
+                ir107_in = np.load(self.path+'/ir107/'+str(event_id))
+                context_sat_in = np.stack([ir069_in, ir069_in], axis=2)
+                context_rad_out = np.expand_dims(ir107_in, axis=-1)
+        # Task9. 降水VIL(0,30min,60min,90min)-->降水VIL(120min)预测
         elif dataset_choice == 'predict':
             sat_in, rad_out = self.get_sevir_predict(idx)
-            context_sat_in, context_rad_out = self.get_sevir_predict(random_index)
+            if self.RAG == 'random':
+                context_sat_in, context_rad_out = self.get_sevir_predict(random_index, prompt=True)
+            elif self.RAG == 'high' or self.RAG == 'low':
+                random_index = self.prompt_item
+                event_id = self.prompt_base[random_index]
+                vil_in = np.load(self.path+'/vil/'+str(event_id))
+                context_sat_in = vil_in[:,:,:-2]
+                context_rad_out = vil_in[:,:,-2:]
+            elif self.RAG == 'rmse':
+                min_rmse = 100
+                for event in self.prompt_base:
+                    vil_in = np.load(self.path+'/vil/'+str(event))
+                    rmse_score = rmse(sat_in, vil_in[:,:,:-2])
+                    if rmse_score<min_rmse:
+                       min_rmse = rmse_score
+                       event_id = event
+                vil_out = np.load(self.path+'/vil/'+str(event_id))
+                context_sat_in = vil_out[:,:,:-2]
+                context_rad_out = vil_out[:,:,-2:]
+            elif self.RAG == 'ssim':
+                max_ssim = -2
+                for event in self.prompt_base:
+                    vil_in = np.load(self.path+'/vil/'+str(event))
+                    ssim_score = ssim(sat_in[:,:,-1], vil_in[:,:,-3], data_range=1)
+                    if ssim_score>max_ssim:
+                       max_ssim = ssim_score
+                       event_id = event
+                vil_out = np.load(self.path+'/vil/'+str(event_id))
+                context_sat_in = vil_out[:,:,:-2]
+                context_rad_out = vil_out[:,:,-2:]
+        # Task2. 降水VIL(0min,60min)-->降水VIL(30min)内插
         elif dataset_choice == 'inter':
             sat_in, rad_out = self.get_sevir_inter(idx)
-            context_sat_in, context_rad_out = self.get_sevir_inter(random_index)
+            if self.RAG == 'random':
+                context_sat_in, context_rad_out = self.get_sevir_inter(random_index, prompt=True)
+            elif self.RAG == 'high' or self.RAG == 'low':
+                random_index = self.prompt_item
+                event_id = self.prompt_base[random_index]
+                vil_in = np.load(self.path+'/vil/'+str(event_id))
+                context_sat_in = vil_in[:,:,[-3,-1]]
+                context_rad_out = vil_in[:,:,-2]
+            elif self.RAG == 'rmse':
+                min_rmse = 100
+                for event in self.prompt_base:
+                    vil_in = np.load(self.path+'/vil/'+str(event))
+                    rmse_score = rmse(sat_in, vil_in[:,:,[-3,-1]])
+                    if rmse_score<min_rmse:
+                       min_rmse = rmse_score
+                       event_id = event
+                vil_in = np.load(self.path+'/vil/'+str(event))
+                context_sat_in = vil_in[:,:,[-3,-1]]
+                context_rad_out = vil_in[:,:,-2]
+            elif self.RAG == 'ssim':
+                max_score = -2
+                for event in self.prompt_base:
+                    vil_in = np.load(self.path+'/vil/'+str(event))
+                    ssim_score = ssim(sat_in[:,:,-1], vil_in[:,:,-1], data_range=1)
+                    if ssim_score>max_score:
+                       max_score = ssim_score
+                       event_id = event
+                vil_in = np.load(self.path+'/vil/'+str(event))
+                context_sat_in = vil_in[:,:,[-3,-1]]
+                context_rad_out = vil_in[:,:,-2]
+        # 降水VIL downscaling
         elif dataset_choice == 'down_scaling_vil':
             sat_in, rad_out = self.get_sevir_vil_down_scaling(idx, variable_type=['vil'])
-            context_sat_in, context_rad_out = self.get_sevir_vil_down_scaling(random_index, variable_type=['vil'])
+            if self.RAG == 'random':
+                context_sat_in, context_rad_out = self.get_sevir_vil_down_scaling(random_index, prompt=True)
+            elif self.RAG == 'high' or self.RAG == 'low':
+                random_index = self.prompt_item
+                event_id = self.prompt_base[random_index]
+                vil_in = np.load(self.path+'/vil/'+str(event_id))
+                context_sat_in = vil_in[:,:,-1]
+                context_rad_out = vil_in[:,:,-1]
+                context_sat_in = np.expand_dims(context_sat_in, axis=-1)
+                context_sat_in = np.dstack((context_sat_in, context_sat_in))
+                context_rad_out = np.expand_dims(context_rad_out, axis=-1)
+                context_sat_in = cv2.resize(np.copy(context_sat_in), (64, 64),
+                            interpolation=cv2.INTER_LINEAR)
+            elif self.RAG == 'ssim':
+                max_score = -2
+                for event in self.prompt_base:
+                    vil_in = np.load(self.path+'/vil/'+str(event))
+                    ssim_score = ssim(rad_out[:,:,-1], vil_in[:,:,-1], data_range=1)
+                    if ssim_score>max_score:
+                       max_score = ssim_score
+                       event_id = event
+                vil_in = np.load(self.path+'/vil/'+str(event_id))
+                context_sat_in = vil_in[:,:,-1]
+                context_rad_out = vil_in[:,:,-1]
+                context_sat_in = np.expand_dims(context_sat_in, axis=-1)
+                context_sat_in = np.dstack((context_sat_in, context_sat_in))
+                context_rad_out = np.expand_dims(context_rad_out, axis=-1)
+                context_sat_in = cv2.resize(np.copy(context_sat_in), (64, 64),
+                            interpolation=cv2.INTER_LINEAR)
+            elif self.RAG == 'rmse':
+                min_rmse = 100
+                for event in self.prompt_base:
+                    vil_in = np.load(self.path+'/vil/'+str(event))
+                    rmse_score = rmse(rad_out[:,:,-1], vil_in[:,:,-1])
+                    if rmse_score<min_rmse:
+                       min_rmse = rmse_score
+                       event_id = event
+                vil_in = np.load(self.path+'/vil/'+str(event_id))
+                context_sat_in = vil_in[:,:,-1]
+                context_rad_out = vil_in[:,:,-1]
+                context_sat_in = np.expand_dims(context_sat_in, axis=-1)
+                context_sat_in = np.dstack((context_sat_in, context_sat_in))
+                context_rad_out = np.expand_dims(context_rad_out, axis=-1)
+                context_sat_in = cv2.resize(np.copy(context_sat_in), (64, 64),
+                            interpolation=cv2.INTER_LINEAR)
+        # IR069 downscaling
         elif dataset_choice == 'down_scaling_ir':
-            sat_in, rad_out = self.get_sevir_vil_down_scaling(idx, variable_type=['ir069'])
-            context_sat_in, context_rad_out = self.get_sevir_vil_down_scaling(random_index, variable_type=['ir069'])
+            sat_in, rad_out = self.get_sevir_vil_down_scaling(idx, variable_type=['ir069'], scale=True)
+            context_sat_in, context_rad_out = self.get_sevir_vil_down_scaling(random_index, variable_type=['ir069'], prompt=True, scale=True)
+        # Task11. IR069(0,30min,60min,90min)-->IR069(120min)预测
         elif dataset_choice == 'ir_predict':
             sat_in, rad_out = self.get_ir_predict(idx, variable_type=['ir069'])
-            context_sat_in, context_rad_out = self.get_ir_predict(random_index, variable_type=['ir069'])
+            context_sat_in, context_rad_out = self.get_ir_predict(random_index, variable_type=['ir069'], prompt=True)
+        # Task6. 卫星(红外IR069，IR107)-->vis估计
         elif dataset_choice == 'vis_recon':
-            sat_in, rad_out = self.get_vis_reconstruction(idx)
-            context_sat_in, context_rad_out = self.get_vis_reconstruction(random_index)
+            sat_in, rad_out, event, frame_id = self.get_vis_reconstruction(idx)
+            # context_sat_in, context_rad_out, event, frame_id = self.get_vis_reconstruction(random_index, prompt=True, event_old=event, has_frame_id=frame_id)
+            context_sat_in, context_rad_out, event, frame_id = self.get_vis_reconstruction(random_index, prompt=True)
+        # OOD tasks
+        elif dataset_choice == 'ir107_predict':
+            sat_in, rad_out = self.get_ir_predict(idx, variable_type=['ir107'])
+            context_sat_in, context_rad_out = self.get_ir_predict(random_index, variable_type=['ir107'], prompt=True)
+        elif dataset_choice == 'down_scaling_ir107':
+            sat_in, rad_out = self.get_sevir_vil_down_scaling(idx, variable_type=['ir107'])
+            context_sat_in, context_rad_out = self.get_sevir_vil_down_scaling(random_index, variable_type=['ir107'], prompt=True)
+        elif dataset_choice == 'ir107_trans_ir069':
+            sat_in, rad_out = self.get_ir_trans(idx,in_variables=['ir107'],out_variables=['ir069'])
+            context_sat_in, context_rad_out = self.get_ir_trans(random_index, in_variables=['ir107'],out_variables=['ir069'], prompt=True)
+        elif dataset_choice == 'sevir_vis':
+            sat_in, rad_out = self.get_sevir_vis(idx)
+            context_sat_in, context_rad_out = self.get_sevir_vis(random_index, prompt=True)   
+        elif dataset_choice == 'vis_predict':
+            sat_in, rad_out = self.get_ir_predict(idx, variable_type=['vis'])
+            context_sat_in, context_rad_out = self.get_ir_predict(random_index, variable_type=['vis'], prompt=True)
+        elif dataset_choice == 'multi_downscaling':
+            sat_in, rad_out = self.multi_down_scaling(idx)
+            context_sat_in, context_rad_out = self.multi_down_scaling(random_index, prompt=True)
+        elif dataset_choice == 'down_scaling_vil_8x':
+            sat_in, rad_out = self.get_sevir_vil_down_scaling(idx, variable_type=['vil'], scale=True)
+            context_sat_in, context_rad_out = self.get_sevir_vil_down_scaling(random_index, variable_type=['vil'], scale=True, prompt=True)
+        elif dataset_choice == 'vil_inter_15min':
+            sat_in, rad_out = self.get_sevir_inter(idx, in_variables=['vil'], scale='15min')
+            context_sat_in, context_rad_out = self.get_sevir_inter(random_index, in_variables=['vil'], scale='15min', prompt=True)
+        elif dataset_choice == 'vil_inter_60min':
+            sat_in, rad_out = self.get_sevir_inter(idx, in_variables=['vil'], scale='60min')
+            context_sat_in, context_rad_out = self.get_sevir_inter(random_index, in_variables=['vil'], scale='60min', prompt=True)
+        elif dataset_choice == 'ir069_inter_60min':
+            sat_in, rad_out = self.get_sevir_inter(idx, in_variables=['ir069'], scale='60min')
+            context_sat_in, context_rad_out = self.get_sevir_inter(random_index, in_variables=['ir069'], scale='60min', prompt=True)
         H, W, _ = sat_in.shape
         if H != self.HQ_size or W != self.HQ_size:
             sat_in = cv2.resize(np.copy(sat_in), (self.HQ_size, self.HQ_size),
                                 interpolation=cv2.INTER_LINEAR)
             context_sat_in = cv2.resize(np.copy(context_sat_in), (self.HQ_size, self.HQ_size),
                                 interpolation=cv2.INTER_LINEAR)
-        H, W, _ = rad_out.shape
-        if H != self.HQ_size or W != self.HQ_size:
-            rad_out = np.expand_dims(cv2.resize(np.copy(rad_out), (self.HQ_size, self.HQ_size),
-                                interpolation=cv2.INTER_LINEAR), axis=2)
+        H, W, C = rad_out.shape
+        if C == 1:
+            if H != self.HQ_size or W != self.HQ_size:
+                rad_out = np.expand_dims(cv2.resize(np.copy(rad_out), (self.HQ_size, self.HQ_size),
+                                    interpolation=cv2.INTER_LINEAR), axis=2)
 
-            context_rad_out = np.expand_dims(cv2.resize(np.copy(context_rad_out), (self.HQ_size, self.HQ_size),
-                                interpolation=cv2.INTER_LINEAR), axis=2)
+                context_rad_out = np.expand_dims(cv2.resize(np.copy(context_rad_out), (self.HQ_size, self.HQ_size),
+                                    interpolation=cv2.INTER_LINEAR), axis=2)
+        else:
+            if H != self.HQ_size or W != self.HQ_size:
+                rad_out = cv2.resize(np.copy(rad_out), (self.HQ_size, self.HQ_size),
+                                    interpolation=cv2.INTER_LINEAR)
+
+                context_rad_out = cv2.resize(np.copy(context_rad_out), (self.HQ_size, self.HQ_size),
+                                    interpolation=cv2.INTER_LINEAR)
 
         if self.phase == 'train':
             # hwc->chw
@@ -789,8 +1363,9 @@ class DatasetSevir_Train(Dataset):
             img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(context_sat_in, (2, 0, 1)))).float()
             img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(context_rad_out, (2, 0, 1)))).float()
             
-            img_HQ2 = np.repeat(img_HQ2, 2, axis=0)
-            img_LQ2 = np.repeat(img_LQ2, 2, axis=0)
+            if C == 1:
+                img_HQ2 = np.repeat(img_HQ2, 2, axis=0)
+                img_LQ2 = np.repeat(img_LQ2, 2, axis=0)
 
             input_query_img1 = img_LQ1
             target_img1 = img_LQ2
@@ -811,8 +1386,9 @@ class DatasetSevir_Train(Dataset):
             img_LQ1 = torch.from_numpy(np.ascontiguousarray(np.transpose(context_sat_in, (2, 0, 1)))).float()
             img_LQ2 = torch.from_numpy(np.ascontiguousarray(np.transpose(context_rad_out, (2, 0, 1)))).float()
             
-            img_HQ2 = np.repeat(img_HQ2, 2, axis=0)
-            img_LQ2 = np.repeat(img_LQ2, 2, axis=0)
+            if C == 1:
+                img_HQ2 = np.repeat(img_HQ2, 2, axis=0)
+                img_LQ2 = np.repeat(img_LQ2, 2, axis=0)
 
             input_query_img1 = img_LQ1
             target_img1 = img_LQ2
@@ -829,14 +1405,21 @@ class DatasetSevir_Train(Dataset):
             # return batch, deg_type
 
 class Dataset_dblur(Dataset):
-    def __init__(self, split='train'):
+    def __init__(self, split='train', prompt='random', prompt_id=6):
         super().__init__()
         self.height = 256
         self.width = 256
         self.ceph_root = 's3://gongjunchao/radar_deblur/blur_data/I10O12/sevir/incepu/TimeStep12'
+        self.ceph_root2 = 's3://gongjunchao/radar_deblur_4long/train/I10O12/sevir/EarthFormer/TimeStep'
+        self.ceph_root3 = 's3://gongjunchao/radar_deblur_4long/valid/I10O12/sevir/EarthFormer/TimeStep'
         self.file_list = self._init_file_list(split)
         self.split = split
-        
+        self.prompt_type = prompt
+        self.prompt_id = prompt_id
+
+        self.path = '/mnt/petrelfs/zhaoxiangyu1/data/deblur_prompt_random'
+        self.prompt_base = get_prompt_base(self.path+'/blur')
+        self.prompt_base.sort()
         ## sproject client ##
         self.client = Client("~/petreloss.conf")
 
@@ -848,21 +1431,34 @@ class Dataset_dblur(Dataset):
         preprocessed total length: 12120
         """
         if split == 'train':
-            files = list(range(0, 10500))
-        elif split == 'valid':
-            files = list(range(10500, 12000))
+            files = list(range(0, 20000))*12
+        elif split == 'val':
+            files = list(range(20000, 21000))
         elif split == 'test':
-            files = list(range(10500, 12000))
+            files = list(range(20000, 21000))
         return files
     
     def __len__(self):
         return len(self.file_list)
 
     def _load_frames(self, file, type):
-        file_path = os.path.join(self.ceph_root, f'{type}_{file}.npy')
+        file_num = file // 12
+        step = file % 12
+        if self.split == 'train':
+            file_path = os.path.join(self.ceph_root2+str(step), f'{type}_{file_num}.npy')
+        else:
+            file_path = os.path.join(self.ceph_root2+str(step), f'{type}_{file_num}.npy')
         with io.BytesIO(self.client.get(file_path)) as f:
             frame_data = np.load(f)
+        frame_data = frame_data*255
+        frame_data = (frame_data-zscore_normalizations_sevir['vil']['shift'])/zscore_normalizations_sevir['vil']['scale']
         tensor = torch.from_numpy(frame_data)
+        return tensor
+    
+    def load_from_prompt(self, prompt_id, prompt_type='blur'):
+        file_path = os.path.join(self.path, prompt_type,self.prompt_base[prompt_id])
+        data = np.load(file_path)
+        tensor = torch.from_numpy(data)
         return tensor
 
     def _get_dataset_name(self):
@@ -879,10 +1475,14 @@ class Dataset_dblur(Dataset):
         file = self.file_list[index]
         blur_frame_data = self._load_frames(file, type='pred')
         gt_frame_data = self._load_frames(file, type='tar')
-        random_index = random.randint(0, len(self.file_list)-1)
-        random_file = self.file_list[random_index]
-        context_blur_frame_data = self._load_frames(random_file, type='pred')
-        context_gt_frame_data = self._load_frames(random_file, type='tar')
+        if self.prompt_type != 'random':
+            context_blur_frame_data = self.load_from_prompt(self.prompt_id, 'blur')
+            context_gt_frame_data = self.load_from_prompt(self.prompt_id, 'gt')
+        else:
+            random_index = random.randint(0, len(self.file_list)-1)
+            random_file = self.file_list[random_index]
+            context_blur_frame_data = self._load_frames(random_file, type='pred')
+            context_gt_frame_data = self._load_frames(random_file, type='tar')
 
         packed_results = dict()
         packed_results['inputs'] = blur_frame_data
@@ -926,6 +1526,141 @@ class Dataset_dblur(Dataset):
             img_LQ1 = np.repeat(img_LQ1, 2, axis=0)
             img_HQ2 = np.repeat(img_HQ2, 2, axis=0)
             img_LQ2 = np.repeat(img_LQ2, 2, axis=0)
+
+            input_query_img1 = img_LQ1
+            target_img1 = img_LQ2
+            input_query_img2 = img_HQ1
+            target_img2 = img_HQ2
+
+            # batch = torch.stack([input_query_img1, target_img1, input_query_img2, target_img2], dim=0)
+            
+            batch = {'input_query_img1': input_query_img1, 'target_img1': target_img1,
+                    'input_query_img2': input_query_img2, 'target_img2': target_img2}
+            
+            return batch, deg_type
+
+
+class Dataset_Sevir_Predict(Dataset):
+    def __init__(self, split='train', prompt='random', prompt_id=6):
+        super().__init__()
+        self.height = 256
+        self.width = 256
+        self.ceph_train_root = 'cluster2:s3://zwl2/sevir_predict//'
+        self.ceph_test_root = 'cluster2:s3://zwl2/sevir_predict_test//'
+        self.file_list = self._init_file_list(split)
+        self.split = split
+        self.prompt_type = prompt
+        self.prompt_id = prompt_id
+
+        self.path = '/mnt/petrelfs/zhaoxiangyu1/data/deblur_prompt_random'
+        self.prompt_base = get_prompt_base(self.path+'/blur')
+        self.prompt_base.sort()
+        ## sproject client ##
+        self.client = Client("~/petreloss.conf")
+
+        assert len(self.file_list) == self.__len__()
+        print('SEVIR {} number: {}'.format(str(self.split), len(self.file_list)))
+
+    def _init_file_list(self, split):
+        """
+        preprocessed total length: 12120
+        """
+        if split == 'train':
+            files = list(range(0, 5088))*12
+        elif split == 'val':
+            files = list(range(0, 1872))
+        elif split == 'test':
+            files = list(range(0, 1872))
+        return files
+    
+    def __len__(self):
+        return len(self.file_list)
+
+    def _load_frames(self, file, type='input'):
+        file_num = file // 12
+        if self.split == 'train':
+            if type == 'input':
+                file_path = os.path.join(self.ceph_train_root, 'IN_vil', f'{file_num}.npy')
+            else:
+                file_path = os.path.join(self.ceph_train_root, 'OUT_vil', f'{file_num}.npy')
+        else:
+            if type == 'input':
+                file_path = os.path.join(self.ceph_test_root, 'IN_vil', f'{file_num}.npy')
+            else:
+                file_path = os.path.join(self.ceph_test_root, 'OUT_vil', f'{file_num}.npy')
+        print(file_path)
+        with io.BytesIO(self.client.get(file_path)) as f:
+            frame_data = np.load(f)
+        # frame_data = (frame_data-zscore_normalizations_sevir['vil']['shift'])/zscore_normalizations_sevir['vil']['scale']
+        tensor = torch.from_numpy(frame_data)
+        return tensor
+    
+    def load_from_prompt(self, prompt_id, prompt_type='blur'):
+        file_path = os.path.join(self.path, prompt_type,self.prompt_base[prompt_id])
+        data = np.load(file_path)
+        tensor = torch.from_numpy(data)
+        return tensor
+
+    def _get_dataset_name(self):
+        dataset_name = 'sevir'
+        return dataset_name 
+    
+    # def _resize(self, frame_data):
+    #     _, _, H, W = frame_data.shape 
+    #     if H != self.height or W != self.height:
+    #         frame_data = nn.functional.interpolate(frame_data, size=(self.height, self.width), mode='bilinear')
+    #     return frame_data
+    
+    def __getitem__(self, index):
+        file = self.file_list[index]
+        vil_in = self._load_frames(file, type='input')
+        vil_out = self._load_frames(file, type='output')
+        if self.prompt_type != 'random':
+            context_blur_frame_data = self.load_from_prompt(self.prompt_id, 'blur')
+            context_gt_frame_data = self.load_from_prompt(self.prompt_id, 'gt')
+        else:
+            random_index = random.randint(0, len(self.file_list)-1)
+            random_file = self.file_list[random_index]
+            context_vil_in = self._load_frames(random_file, type='input')
+            context_vil_out = self._load_frames(random_file, type='output')
+
+        deg_type='sevir_predict'
+
+        H, W, C = vil_in.shape
+        if H != 256 or W != 256:
+            vil_in = cv2.resize(np.copy(vil_in), (256, 256),
+                                interpolation=cv2.INTER_LINEAR)
+            vil_out = cv2.resize(np.copy(vil_out), (256, 256),
+                                interpolation=cv2.INTER_LINEAR)
+            context_vil_in = cv2.resize(np.copy(context_vil_in), (256, 256),
+                                interpolation=cv2.INTER_LINEAR)
+            context_vil_out = cv2.resize(np.copy(context_vil_out), (256, 256),
+                                interpolation=cv2.INTER_LINEAR)
+
+        if self.split == 'train':
+            img_HQ1 = torch.from_numpy(np.ascontiguousarray(vil_in)).float()
+            img_HQ2 = torch.from_numpy(np.ascontiguousarray(vil_out)).float()
+            img_LQ1 = torch.from_numpy(np.ascontiguousarray(context_vil_in)).float()
+            img_LQ2 = torch.from_numpy(np.ascontiguousarray(context_vil_out)).float()
+
+            input_query_img1 = img_LQ1
+            target_img1 = img_LQ2
+            input_query_img2 = img_HQ1
+            target_img2 = img_HQ2
+
+            # if dataset_choice == 'predict':
+            #     batch = [input_query_img1, target_img1, input_query_img2, target_img2]
+            # else:
+            #     batch = torch.stack([input_query_img1, target_img1, input_query_img2, target_img2], dim=0)
+            batch = [input_query_img1, target_img1, input_query_img2, target_img2]
+
+            return batch, deg_type
+        
+        else:
+            img_HQ1 = torch.from_numpy(np.ascontiguousarray(vil_in)).float()
+            img_HQ2 = torch.from_numpy(np.ascontiguousarray(vil_out)).float()
+            img_LQ1 = torch.from_numpy(np.ascontiguousarray(context_vil_in)).float()
+            img_LQ2 = torch.from_numpy(np.ascontiguousarray(context_vil_out)).float()
 
             input_query_img1 = img_LQ1
             target_img1 = img_LQ2

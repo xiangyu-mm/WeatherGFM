@@ -2,13 +2,13 @@
 #SBATCH -J STEAD.EarlyWarning      # 作业在调度系统中的作业名为myFirstJob;
 #SBATCH -o %j-STEAD.EarlyWarning.out  # 脚本执行的输出将被保存在20210827-%j.out文件下，%j表示作业号;
 #SBATCH -e %j-STEAD.EarlyWarning.out  # 脚本执行的输出将被保存在20210827-%j.out文件下，%j表示作业号;
-#SBATCH --job-name=STEAD.EarlyWarning
+#SBATCH --job-name=xiangyu
 #SBATCH --partition=ai4earth
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:8
+#SBATCH --gres=gpu:4
 
-GPUS_PER_NODE=8
+GPUS_PER_NODE=4
 export HOSTNAMES=`scontrol show hostnames "$SLURM_JOB_NODELIST"`
 export MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
 export MASTER_PORT=$(expr 10000 + $(echo -n $SLURM_JOBID | tail -c 4))
@@ -31,7 +31,7 @@ echo "WORLD_SIZE:" $WORLD_SIZE "NODE_RANK:" $NODE_RANK "DEVICES:" $CUDA_VISIBLE_
 echo "MASTER_ADDR:" $MASTER_ADDR "MASTER_PORT:" $MASTER_PORT "SLURM_PROCID:" $SLURM_PROCID
 echo "NNODES": $NNODES
 
-export CMD="train_PromptGIP.py --model mae_vit_large_patch16_dec512d8b_input256 --input_size 256 --batch_size 8 --warmup_epochs 5 --epochs 50 --blr 1e-4 --save_ckpt_freq 5 --output_dir experiments/weather_5tasks --data_path /mnt/petrelfs/zhaoxiangyu1/data/Test100_256 --data_path_val /mnt/petrelfs/zhaoxiangyu1/data/Test100_256"
+export CMD="train_PromptGIP.py --model mae_vit_large_patch16_dec512d8b_input256 --input_size 256 --batch_size 8 --warmup_epochs 5 --epochs 50 --blr 1e-4 --save_ckpt_freq 5 --output_dir experiments/large_ft/weather_5tasks --ckpt /mnt/petrelfs/zhaoxiangyu1/code/weather_prompt_new/experiments/weather_5tasks/checkpoint-49.pth --data_path /mnt/petrelfs/zhaoxiangyu1/data/Test100_256 --data_path_val /mnt/petrelfs/zhaoxiangyu1/data/Test100_256"
 
 export LAUNCHER="torchrun \
     --nproc_per_node $GPUS_PER_NODE \
