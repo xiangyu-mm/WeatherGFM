@@ -19,7 +19,7 @@ python data/upload_era5.py
 ```
 
 # 3. Download pretrained models
-Download the pretrained model from [huggingface](https://huggingface.co/xiangyu556677/WeatherGFM)
+Download the pretrained models from [huggingface](https://huggingface.co/xiangyu556677/WeatherGFM).
 # 4. Test
 
 a. Different task using different prompt, we test up to 25 different tasks:
